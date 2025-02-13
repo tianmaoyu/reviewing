@@ -2,13 +2,17 @@
 
 下载 oracle openjdk1.7 / oracle-openjdk-23
 
-![image-20241206132820666](/Users/eric/Desktop/笔记/复习日记/img/image-20241206132820666.png)
 
-![image-20241206133211397](/Users/eric/Desktop/笔记/复习日记/img/image-20241206133211397.png)
+
+![image-20250213091731204](./img/image-20250213091731204-9409457-9409461.png)
+
+
+
+![image-20241206133211397](./img/image-20241206133211397.png)
 
 把安装的 1.7 本地加载上来
 
-![image-20241206133554030](/Users/eric/Desktop/笔记/复习日记/img/image-20241206133554030.png)
+![image-20241206133554030](./img/image-20241206133554030.png)
 
 ## 一，数据结构
 
@@ -16,7 +20,7 @@
 
 Openjdk  / OracleJdk 稍微有点不一样
 
-![image-20241205093000202](/Users/eric/Desktop/笔记/复习日记/img/image-20241205093000202.png)
+![image-20241205093000202](./img/image-20241205093000202.png)
 
 ![image-20241205094655336](/Users/eric/Desktop/笔记/复习日记/img/image-20241205094655336.png)
 
@@ -210,7 +214,7 @@ casTabAt(tab, i, null, new Node<K,V>(hash, key, value, null))
 
 1. 使用 synchorized 对 链表的头，或者树的root 节点 加锁  （比较费时的用）
 
-   ![image-20241206190449851](/Users/eric/Desktop/笔记/复习日记/img/image-20241206190449851.png)
+   ![image-20241206190449851](./img/image-20241206190449851.png)
 
 #### 四，扩容
 
@@ -260,7 +264,7 @@ https://blog.csdn.net/m0_37550986/article/details/125230667
 for (int[] tab = table;;)
 ```
 
-![image-20241207120525134](/Users/eric/Desktop/笔记/复习日记/img/image-20241207120525134.png)
+![image-20241207120525134](./img/image-20241207120525134.png)
 
 ```java
     public static void main(String[] args){
@@ -483,7 +487,7 @@ int wc = workerCountOf(c);
 
 ```
 
-![image-20241208164027840](/Users/eric/Desktop/笔记/复习日记/img/image-20241208164027840.png)
+![image-20241208164027840](./img/image-20241208164027840.png)
 
 - [x] 如何区分核心线程，非核心线程？ ：没有区分
 
@@ -528,11 +532,11 @@ int wc = workerCountOf(c);
   boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
   ```
 
-  ![image-20241208182303417](/Users/eric/Desktop/笔记/复习日记/img/image-20241208182303417.png)
+  ![image-20241208182303417](./img/image-20241208182303417.png)
 
   
 
-  ![image-20241208180615037](/Users/eric/Desktop/笔记/复习日记/img/image-20241208180615037.png)
+  ![image-20241208180615037](./img/image-20241208180615037.png)
 
 - [x] 几个常用参数： corePoolSize，maximumPoolSize；keepAliveTime；workQueue，threadFactory；RejectedExecutionHandler
 
@@ -594,9 +598,9 @@ return Thread.interrupted();
 
 tryAcqurie 在具体子内中使用
 
-![image-20241208225056432](/Users/eric/Desktop/笔记/复习日记/img/image-20241208225056432.png)
+![image-20241208225056432](./img/image-20241208225056432.png)
 
-![image-20241208224703165](/Users/eric/Desktop/笔记/复习日记/img/image-20241208224703165.png)
+![image-20241208224703165](./img/image-20241208224703165.png)
 
 未抢到锁的添加到尾部
 
@@ -723,7 +727,7 @@ jdk 代码入口 / github 下载源代码
 
 > Java.c  中的 JavaMain 方法
 
-![image-20241209194633554](/Users/eric/Desktop/笔记/复习日记/img/image-20241209194633554.png)
+![image-20241209194633554](./img/image-20241209194633554.png)
 
 其中有个变量 ：mainClass，执行main 方法
 
@@ -767,7 +771,7 @@ static jclass LoadMainClass(JNIEnv *env, int mode, char *name)
 }
 ```
 
-![image-20241209200102836](/Users/eric/Desktop/笔记/复习日记/img/image-20241209200102836.png)
+![image-20241209200102836](./img/image-20241209200102836.png)
 
 ```
 private static final ClassLoader scloader = ClassLoader.getSystemClassLoader();
@@ -988,7 +992,7 @@ public class MyClassLoaderC extends ClassLoader {
 
 - 还没有，就交给appclassloader的路径去找。
 
-![image-1703941410233](/Users/eric/Desktop/笔记/复习日记/img/image-1703941410233.png)
+![image-1703941410233](./img/image-1703941410233.png)
 
 ```c
 //JVM中的一种宏定义写法，它用来包裹本地方法（native method）的实现
@@ -1148,7 +1152,7 @@ https://www.cnblogs.com/hjcenry/p/17938808
 
 ==源代码查看==。 hotspot 代码
 
-![image-20241210162534893](/Users/eric/Desktop/笔记/复习日记/img/image-20241210162534893.png)
+![image-20241210162534893](./img/image-20241210162534893.png)
 
 ### G1
 
