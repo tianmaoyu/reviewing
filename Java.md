@@ -566,6 +566,194 @@ int wc = workerCountOf(c);
 
 - [x] ==考察点，值得借鉴的地方==
 
+
+
+### **一、线程池核心参数与工作流程**
+
+Java 线程池通过 `ThreadPoolExecutor` 实现，其核心参数如下：
+
+```java
+ThreadPoolExecutor(
+    int corePoolSize,      // 核心线程数
+    int maximumPoolSize,   // 最大线程数
+    long keepAliveTime,    // 非核心线程空闲存活时间
+    TimeUnit unit,         // 时间单位
+    BlockingQueue<Runnable> workQueue, // 任务队列
+    RejectedExecutionHandler handler   // 拒绝策略
+)
+```
+
+**工作流程**：
+
+1. 提交任务时，优先使用核心线程处理。
+2. 核心线程满后，任务进入队列等待。
+3. 队列满后，创建非核心线程（直到达到最大线程数）。
+4. 所有线程和队列均满时，触发拒绝策略。
+
+------
+
+### **二、核心线程数（corePoolSize）设置原则**
+
+#### **1. 任务类型决定线程数**
+
+- CPU 密集型任务（如计算、逻辑处理）：
+  - 线程数 ≈ CPU 核心数 + 1（防止线程阻塞浪费资源）。
+  - 示例：4 核 CPU → `corePoolSize = 5`。
+- IO 密集型任务（如网络请求、文件读写）：
+  - 线程数 ≈ 2 * CPU 核心数（利用线程等待 IO 的空闲时间）。
+  - 示例：4 核 CPU → `corePoolSize = 8`。
+
+#### **2. 动态调整**
+
+- 使用 `setCorePoolSize()` 方法动态调整核心线程数（如根据业务高峰/低谷）。
+- 默认情况下，核心线程即使空闲也不会被回收（需设置 `allowCoreThreadTimeOut(true)` 改变行为）。
+
+------
+
+### **三、最大线程数（maximumPoolSize）设置原则**
+
+- **公式**：`maximumPoolSize = corePoolSize + 弹性扩展余量`。
+- 场景示例：
+  - **突发流量**：若任务量可能突然激增，可设置较大的 `maximumPoolSize`（如 `corePoolSize * 2`）。
+  - **资源敏感型系统**：若服务器资源有限，需严格控制最大线程数，避免 OOM。
+- **注意**：线程数过多会导致频繁上下文切换，反而降低性能。
+
+------
+
+### **四、任务队列（workQueue）选择**
+
+| **队列类型**                              | **特点**                                                     | **适用场景**                       |
+| ----------------------------------------- | ------------------------------------------------------------ | ---------------------------------- |
+| **无界队列**（如 `LinkedBlockingQueue`）  | 队列无限增长，可能导致 OOM                                   | 任务量可控且拒绝策略要求不高的场景 |
+| **有界队列**（如 `ArrayBlockingQueue`）   | 队列满后触发创建非核心线程                                   | 需要限制资源使用的场景             |
+| **同步移交队列**（`SynchronousQueue`）    | 不存储任务，直接移交线程执行（需配合较大的 `maximumPoolSize`） | 高吞吐、短任务场景                 |
+| **优先级队列**（`PriorityBlockingQueue`） | 按优先级处理任务                                             | 需要任务优先级的场景               |
+| **DelayedWorkQueue** 延迟周期             |                                                              |                                    |
+
+------
+
+### **五、拒绝策略（RejectedExecutionHandler）**
+
+| **策略**                | **行为**                                               |
+| ----------------------- | ------------------------------------------------------ |
+| **AbortPolicy**（默认） | 直接抛出 `RejectedExecutionException`，                |
+| **CallerRunsPolicy**    | 由提交任务的线程直接执行任务（降低提交速度，避免雪崩） |
+| **DiscardPolicy**       | 静默丢弃新任务                                         |
+| **DiscardOldestPolicy** | 丢弃队列中最旧的任务，重新提交新任务                   |
+
+------
+
+### **六、最佳实践与示例**
+
+#### **1. 通用配置模板**
+
+```java
+int cpuCores = Runtime.getRuntime().availableProcessors();
+
+ThreadPoolExecutor executor = new ThreadPoolExecutor(
+    cpuCores + 1,                   // corePoolSize
+    cpuCores * 2,                   // maximumPoolSize
+    60, TimeUnit.SECONDS,           // keepAliveTime
+    new LinkedBlockingQueue<>(1000),// 有界队列（容量1000）
+    new ThreadFactoryBuilder().setNameFormat("task-pool-%d").build(), // 自定义线程名
+    new CallerRunsPolicy()          // 拒绝策略
+);
+```
+
+#### **2. 场景优化**
+
+- Web 服务器请求处理（IO 密集型）：
+
+  ```java
+  corePoolSize = 2 * cpuCores;
+  maximumPoolSize = 4 * cpuCores;
+  workQueue = new LinkedBlockingQueue<>(2000);
+  ```
+
+- 批量数据处理（CPU 密集型）：
+
+  ```java
+  corePoolSize = cpuCores + 1;
+  maximumPoolSize = cpuCores + 1; // 严格限制线程数
+  workQueue = new SynchronousQueue<>(); // 无缓冲，直接执行
+  ```
+
+------
+
+### **七、注意事项**
+
+1. **避免无界队列**：防止任务堆积导致内存溢出（OOM）。
+
+2. 监控线程池状态：
+
+   ```java
+   // 获取活跃线程数
+   executor.getActiveCount();
+   // 获取队列积压任务数
+   executor.getQueue().size();
+   ```
+
+3. 优雅关闭线程池：
+
+   ```java
+   executor.shutdown();          // 停止接收新任务，等待已有任务完成
+   executor.shutdownNow();       // 尝试立即终止所有任务（慎用）
+   ```
+
+4. **线程池隔离**：不同业务使用独立线程池，避免互相影响。
+
+------
+
+### 八，补充常用功能
+
+在web应用中，通常还要出来，线程池中，上下两个线程任务交接情况；： 一个请求，过来使用线程池中的线程 来处理任务，请求线程返回情况； ==threadlocal== 数据获取和释放问题。
+
+
+
+### **八、总结**
+
+- **核心线程数**：由任务类型（CPU/IO 密集型）和 CPU 核心数决定。
+- **最大线程数**：根据系统负载和资源限制动态调整。
+- **队列选择**：优先使用有界队列，结合拒绝策略保护系统稳定性。
+- **拒绝策略**：推荐 `CallerRunsPolicy` 或自定义策略，避免直接丢弃任务。
+
+通过合理配置线程池参数，可以在高并发场景下实现资源高效利用与系统稳定性的平衡。
+
+
+
+
+
+==备注==：在IO密集型任务中，推荐线程数约为CPU核心数的两倍，主要基于以下原因：
+
+1. **利用IO等待时间**：
+   - **阻塞期间CPU空闲**：当线程执行IO操作（如读写文件、网络请求）时，会进入阻塞状态，此时CPU可执行其他线程的任务。
+   - **提高吞吐量**：通过增加线程数，CPU在等待一个线程的IO完成时，可切换到其他线程执行计算任务，减少空闲时间。
+2. **经验公式与平衡点**：
+   - **2倍核心数的由来**：假设线程有约50%的时间在等待IO，则双倍线程可让CPU在等待期间处理另一线程的任务，保持高利用率。
+   - **避免过度切换**：过多的线程会增加上下文切换开销，两倍核心数是平衡利用率和切换成本的经验值。
+3. **实际场景调整**：
+   - **IO等待时间差异**：若IO延迟更高（如远程API调用），可适当增加线程数；若IO较快（如本地SSD），可减少线程数。
+   - **系统资源限制**：需考虑内存、文件描述符等资源，避免因线程过多导致OOM或资源竞争。
+
+**示例**：
+
+- 4核CPU处理网络请求：
+  - 设置8个线程，每个线程在等待响应时，CPU处理其他请求，提升并发能力。
+- 调整依据：
+  - 监控CPU利用率：若长期低于70%，可增加线程；若过高（>90%）或上下文切换频繁，则减少线程。
+
+**总结**：两倍核心数是平衡IO等待和CPU利用的经验起点，实际需根据任务特性和系统监控动态调整。
+
+-----
+
+Redis 出现卡顿（延迟高、响应慢）通常由多种原因引起，需要结合具体场景排查。以下是常见原因及对应的解决方案：
+
+
+
+
+
+
+
 ### 3,同步：`Synchronied ` vs `CAS`
 
 1. 使用场景，同步代码块，对可以锁在 类型上，也可以锁在对象上，可以在方法上，也可以在方法内部；一种悲观锁，没有获得锁的线程处于 blocked 状态，如果在线程多线程通信配合objec.wat()/object.notify()； 一般情况暂用的资源较多，不支持 ==中断操作==
