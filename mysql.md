@@ -4,20 +4,26 @@
 2. Mysql 数据库中修改如何对它进行记录修改前，修改后 （多个角度，binlog）
 3. Mysql 中的某mvcc 原理 ==难==
 
-1. **解释 InnoDB 与 MyISAM 的区别。**
-2. **如何优化一个复杂的 SQL 查询？**
-3. **什么是死锁？如何避免死锁？**
-4. **如何通过 EXPLAIN 来优化查询？**
-5. **如果你有一个包含上百万条记录的表，如何优化查询性能？**
-6. **如何在 MySQL 中实现主从复制？**
+4. **解释 InnoDB 与 MyISAM 的区别。**
+5. **如何优化一个复杂的 SQL 查询？**
+6. **什么是死锁？如何避免死锁？**
+7. **如何通过 EXPLAIN 来优化查询？**
+8. **如果你有一个包含上百万条记录的表，如何优化查询性能？**
+9. **如何在 MySQL 中实现主从复制？**
 
-7. **什么是事务的隔离级别？不同级别的区别是什么？**
+10. **什么是事务的隔离级别？不同级别的区别是什么？**
 
-8. **MySQL 中的数据类型有哪些？**
+11. **MySQL 中的数据类型有哪些？**
 
-9. **如何做数据库备份与恢复？**
-10. **MySQL 的存储引擎有哪些，如何选择合适的存储引擎？**
-11. MySQL核心组件？
+12. **如何做数据库备份与恢复？**
+13. **MySQL 的存储引擎有哪些，如何选择合适的存储引擎？**
+14. MySQL核心组件？
+15. 无索引或全表扫描时的锁行为
+16. 共享锁，表示锁，行锁，**间隙锁**  机制和在什么情况会触发？
+
+
+
+
 
 #### 知识点
 
@@ -102,6 +108,13 @@
 
 31. 优化方向
 
+    - 索引：无索引，索引失效效，联合索引-最左，区分度低上
+    - sql： 大sql才分，分页优化
+    - 表结构：冗余，选择正确的数据类型
+    - 使用redis：减轻压力
+    - 架构：分库，分表，读写分离
+    - 硬件和配置：
+
     1. 表结构，存储引擎
     2. 字段冗余，sql 语句，索引
     3. 分库，分表，读写分离
@@ -173,7 +186,13 @@
 3. **监控工具**
 
    - `SHOW FULL PROCESSLIST`：实时查看活跃查询。
-   - **Performance Schema**：记录 SQL 执行统计信息。
+   
+   - **Performance Schema**：性能模式下，记录 SQL 执行统计信息。
+   
+     ```
+     Performance Schema 是一个内置的性能监控工具，用于收集数据库服务器运行时的详细性能数据。开启后，它可以帮助开发者或管理员分析查询性能、资源消耗、锁竞争、连接行为等关键指标。
+     ```
+   
    - **Prometheus + Grafana**：可视化监控数据库指标。
 
 #### **二、慢 SQL 的常见原因**
@@ -226,7 +245,7 @@
 
 - **减少 `SELECT \*`**：仅查询必要字段。
 
-- **分解复杂查询**：将大查询拆分为多个小查询，减少锁竞争。
+- **分解复杂查询**：将大sql 拆分 分为多个小sql，减少锁竞争。
 
 ##### **3. 表结构优化**
 
@@ -269,14 +288,6 @@
 
 
 
-
-
-
-
-### 2.2 Mysql 数据库中修改如何对它进行记录修改前，修改后 （多个角度，binlog）
-
-
-
 ### 2.3  Mysql 中的MVCC 核心原理
 
 1. **版本链与隐藏字段**：
@@ -285,13 +296,18 @@
      - `DB_ROLL_PTR`（7字节）：指向Undo Log中旧版本数据的指针，形成版本链。
      - `DB_ROW_ID`（6字节）：行标识（若未显式定义主键时自动生成）。
    - 每次更新/删除操作时，旧数据会被存入Undo Log，并通过`DB_ROLL_PTR`链接为新版本的“历史记录”。
-2. **Read View（一致性视图）**：
+
+2. **Read View（一致性视图）规则==什么时候启动，机制==**：
+
+   > select 读取时候，（两种情况，隔离级别）
+
    - 事务在启动时生成Read View，用于判断数据版本的可见性，包含：
      - `trx_ids`：当前活跃（未提交）的事务ID列表。
-     - `low_limit_id`：生成Read View时系统尚未分配的下一个事务ID（即当前最大事务ID+1）。
-     - `up_limit_id`：活跃事务中最小的事务ID。
-     - `creator_trx_id`：创建该Read View的事务ID。
+     - `低水位-low_limit_id`： 生成Read View时系统尚未分配的下一个事务ID（即当前最大事务ID+1）。
+     - `高水位-up_limit_id`：活跃事务中最小的事务ID。
+     - `当前创建-creator_trx_id`：创建该Read View的事务ID。
    - 通过比较数据版本的`DB_TRX_ID`与Read View的规则，决定版本是否可见。
+
 3. **可见性判断规则**：
    - 若`DB_TRX_ID < up_limit_id`：该版本在Read View创建前已提交，**可见**。
    - 若`DB_TRX_ID >= low_limit_id`：该版本在Read View创建后生成，**不可见**。
@@ -299,6 +315,7 @@
      - `DB_TRX_ID`在`trx_ids`列表中：生成该版本的事务仍活跃，**不可见**。
      - 否则：事务已提交，**可见**。
    - 若`DB_TRX_ID = creator_trx_id`：该版本由当前事务修改，**可见**。
+
 4. **Undo Log与版本链遍历**：
    - 当某行数据被多次修改，所有版本通过`DB_ROLL_PTR`形成链表。
    - 事务读取数据时，从最新版本开始遍历版本链，找到第一个符合可见性规则的版本。
@@ -342,13 +359,155 @@ MVCC通过版本链、Read View和Undo Log的协作，实现了高效的读写�
 
 
 
+### 1.2.1 ReadView 生成机制
+
+在 MySQL 的 InnoDB 存储引擎中，**Read View** 是 **多版本并发控制（MVCC）** 的核心机制之一，用于确定事务在某个时间点可以看到哪些数据版本。它的创建时机和位置与事务的隔离级别密切相关。以下是详细解释：
+
+**1. Read View 的作用**
+
+Read View 主要用于解决以下问题：
+
+- **数据可见性**：判断当前事务可以看到哪些已提交或未提交的数据版本。
+- **事务隔离性**：实现不同隔离级别（如 `READ COMMITTED` 和 `REPEATABLE READ`）的语义。
+
+Read View 的核心是记录事务启动时（或查询时）的“数据快照”，通过对比事务 ID（Transaction ID）和数据的版本链（Undo Log），决定哪些数据对当前事务可见。
+
+### **2. Read View 的创建时机**
+
+Read View 的创建时间取决于 **事务的隔离级别**：
+
+#### **(1) 可重复读（REPEATABLE READ）**
+
+- **创建时机**：
+  在事务中 **第一次执行快照读（Snapshot Read）** 时创建（如 `SELECT` 语句）。
+
+- **生命周期**：
+  该 Read View 会 **在整个事务期间复用**，后续所有快照读都基于此视图，确保事务内数据一致性（“可重复读”的语义）。
+
+  **示例**：
+
+  ```sql
+  START TRANSACTION;
+  -- 第一次 SELECT 触发 Read View 创建
+  SELECT * FROM users WHERE id = 1;  -- Read View 在此刻生成
+  -- 后续 SELECT 复用同一个 Read View
+  SELECT * FROM orders WHERE user_id = 1;
+  COMMIT;
+  ```
+
+**(2) 读已提交（READ COMMITTED）**
+
+- **创建时机**：每次执行快照读（如 `SELECT`）时都会 **新建一个 Read View**。
+
+- **生命周期**：Read View 仅用于当前查询，下次查询会重新生成，因此事务能看到其他事务已提交的最新数据。
+
+  **示例**：
+
+  ```sql
+  START TRANSACTION;
+  -- 第一次 SELECT 生成 Read View
+  SELECT * FROM users WHERE id = 1;  -- Read View 1
+  -- 其他事务提交了数据...
+  -- 第二次 SELECT 生成新的 Read View
+  SELECT * FROM users WHERE id = 1;  -- Read View 2（可能看到新提交的数据）
+  COMMIT;
+  ```
+
+**3. Read View 的数据结构**
+
+每个 Read View 包含以下关键信息：
+
+1. **活跃事务 ID 列表（m_ids）**：
+   生成 Read View 时，所有未提交的事务 ID（即活跃事务）。
+2. **低水位（up_limit_id）**：
+   活跃事务中最小的事务 ID。
+3. **高水位（low_limit_id）**：
+   生成 Read View 时系统尚未分配的下一个事务 ID（即当前最大事务 ID + 1）。
+4. **创建者事务 ID（creator_trx_id）**：
+   生成该 Read View 的事务 ID（对于只读事务，可能为 0）。
+
+**4. 数据可见性判断规则**
+
+InnoDB 通过 Read View 和数据行的 **隐藏事务 ID 字段**（`DB_TRX_ID`）判断可见性：
+
+- **数据行的 `DB_TRX_ID`**：记录最后一次修改该行数据的事务 ID。
+
+- 判断逻辑：
+
+  1. 如果 `DB_TRX_ID < up_limit_id`：
+     该行数据在 Read View 创建前已提交，**可见**。
+
+  2. 如果 `DB_TRX_ID >= low_limit_id`：
+     该行数据在 Read View 创建后修改，**不可见**。
+
+  3. 如果up_limit_id <= DB_TRX_ID < low_limit_id：
+
+     检查DB_TRX_ID是否在活跃事务列表m_ids中：
+
+     - 若在列表中：数据由未提交事务修改，**不可见**。
+     - 若不在列表中：数据已提交，**可见**。
+
+### 5. 示例场景
+
+**场景 1：可重复读（REPEATABLE READ）**
+
+```sql
+-- 事务 A（隔离级别：REPEATABLE READ）
+START TRANSACTION;
+-- 第一次 SELECT 创建 Read View（假设此时活跃事务为空）
+SELECT * FROM users WHERE id = 1;  -- 返回版本 V1
+
+-- 事务 B 更新 id=1 的数据并提交
+UPDATE users SET name = 'Bob' WHERE id = 1;
+COMMIT;
+
+-- 事务 A 再次查询（复用之前的 Read View）
+SELECT * FROM users WHERE id = 1;  -- 仍返回版本 V1（可重复读）
+COMMIT;
+```
+
+**场景 2：读已提交（READ COMMITTED）**
+
+```sql
+-- 事务 A（隔离级别：READ COMMITTED）
+START TRANSACTION;
+-- 第一次 SELECT 创建 Read View 1
+SELECT * FROM users WHERE id = 1;  -- 返回版本 V1
+
+-- 事务 B 更新 id=1 的数据并提交
+UPDATE users SET name = 'Bob' WHERE id = 1;
+COMMIT;
+
+-- 事务 A 再次查询（新建 Read View 2）
+SELECT * FROM users WHERE id = 1;  -- 返回版本 V2（读已提交）
+COMMIT;
+```
+
+**6. 总结**
+
+- **Read View 的创建位置**：
+  在事务的 **内存中** 生成，用于管理当前事务的可见性逻辑。
+- 创建时机：
+  - `REPEATABLE READ`：事务第一次快照读时创建，后续复用。
+  - `READ COMMITTED`：每次快照读时创建新的 Read View。
+- **核心作用**：
+  通过对比事务 ID 和数据版本链，实现不同隔离级别的数据可见性控制。
+
+通过合理选择隔离级别和优化事务设计，可以平衡数据一致性与并发性能。
+
+
+
 ### 1.3，Mysql 数据库中修改如何对它进行记录修改前，修改后 （多个角度，binlog）
 
-在 MySQL 数据库中，记录数据修改前后的信息可以通过多种机制实现。以下是几种常见方法及其详细说明：
+在 MySQL 数据库中，记录数据修改前后的信息可以通过多种机制实现。以下是几种常见方法及其详细说明： binlog,触发器，义务代码中编写
+
+
 
 ------
 
 ### 1. **通过 Binlog 记录变更**
+
+> Canna 开源工具
 
 MySQL 的二进制日志（Binary Log, Binlog）是记录所有数据库结构变更和数据操作的核心机制，支持数据复制和恢复。不同格式的 Binlog 对修改记录的存储方式不同：
 
@@ -418,6 +577,8 @@ mysqlbinlog --base64-output=decode-rows -v binlog.000001
    ```
 
 2. **定义 `BEFORE UPDATE` 触发器**：
+
+   > 可以创建多个触发器覆盖 `INSERT`、`UPDATE`、`DELETE`：
 
    ```sql
    DELIMITER $$
@@ -752,11 +913,66 @@ CREATE TABLE users (
 - **权衡索引数量**：过多索引会增加写操作开销，需平衡读写性能。
 - **监控慢查询**：通过 `EXPLAIN` 分析执行计划，检查是否出现回表（`Using index condition` 或 `Using where`）。
 
-------
-
-### 总结
+总结
 
 **回表** 是数据库通过二级索引定位数据后，为获取完整行数据而访问主键索引的过程。合理设计索引（如覆盖索引）可显著减少回表操作，提升查询效率。
+
+
+
+### 15, select *
+
+>  解析阶段，执行阶段-覆盖索引，传输阶段；
+
+**1. 解析阶段的负担**
+
+**(1) 解析 `SELECT \*` 的步骤**
+
+当执行 `SELECT *` 时，MySQL 需要完成以下额外操作：
+
+1. **元数据查询**：
+   解析器需要从系统表（如 `INFORMATION_SCHEMA.COLUMNS`）或表的定义中获取所有列名。
+2. **列名展开**：
+   将 `*` 替换为实际的列名列表（例如 `id, name, age`）。
+3. **权限校验**：
+   检查用户是否有权访问所有列（若某些列权限受限，可能导致错误）。
+
+**(2) 显式列名的解析**
+
+如果显式指定列（如 `SELECT id, name`），解析器直接验证这些列是否存在，无需额外查询元数据。
+
+**(3) 性能差异**
+
+- **轻微影响**：
+  在大多数场景下，`SELECT *` 的解析负担 **微乎其微**，因为表的元数据通常已缓存（如 `table_definition_cache`），不会显著增加解析时间。
+- **极端场景**：
+  若表有极多列（如数百列）或频繁重建表结构（导致元数据缓存失效），可能略微增加解析开销。
+
+**2. 执行阶段的负担**
+
+虽然解析阶段的负担可以忽略，但 `SELECT *` 在 **执行阶段** 的负面影响更显著：
+
+1. **数据传输开销**：
+   返回所有列会增加网络传输和客户端内存占用，尤其是包含 `TEXT`/`BLOB` 等大字段时。
+2. ==索引覆盖失效==：
+   若查询只需索引中的列，`SELECT *` 会强制回表查询数据行，无法利用覆盖索引。
+
+**3. 总结**
+
+|   **阶段**   |                      `SELECT *` 的影响                       |
+| :----------: | :----------------------------------------------------------: |
+| **解析阶段** |          轻微负担（需展开列名），但通常可忽略不计。          |
+| **执行阶段** | 显著负担（数据传输、索引失效、执行计划次优化），是主要性能瓶颈。 |
+
+**建议**
+
+- **生产环境**：
+  始终显式指定所需列（如 `SELECT id, name`），避免执行阶段的性能问题。
+- **临时调试**：
+  可酌情使用 `SELECT *`，但需注意敏感字段和性能影响。
+
+
+
+
 
 #### 16. Redo Log和Undo Log的作用？
 
@@ -792,8 +1008,7 @@ CREATE TABLE users (
 
 - InnoDB在可重复读隔离级别下，对索引记录间的间隙加锁，防止幻读。
 - 例如：`SELECT * FROM users WHERE age > 20 FOR UPDATE`会锁住age>20的间隙。
-
-
+- 没有命中索引的时，事务隔离级别位 可重复读-   中的范围查询；
 
 
 
@@ -1018,7 +1233,7 @@ SET GLOBAL binlog_format = 'ROW';
    （InnoDB特有）：
 
    - **Prepare阶段**：InnoDB将事务的Redo Log写入磁盘，事务进入“准备提交”状态。
-   - Commit阶段：
+   - **Commit阶段**：
      - 将事务的Binlog写入磁盘。
      - 提交事务，标记Redo Log为已提交。
    - 确保Binlog和Redo Log的一致性，避免数据丢失或不一致。
@@ -1155,7 +1370,7 @@ Relay Log 是 MySQL 主从复制中的核心组件，**负责在从库上暂存�
   WHERE created_at BETWEEN '2023-01-01' AND '2023-12-31'
   ```
 
-- **覆盖索引**
+- **覆盖索引** ：
   若查询仅需索引字段，直接通过索引返回数据，避免回表：
 
   ```sql
@@ -1400,6 +1615,130 @@ CREATE INDEX idx_product_created ON orders(product_name, created_at);
 
 
 
+
+
+### 15，无索引或全表扫描时的锁行为
+
+在 MySQL 的 InnoDB 存储引擎中，**无索引或全表扫描的查询是否加锁，取决于事务隔离级别和操作类型**。以下是详细分析：
+
+**1. 无索引或全表扫描时的锁行为**
+
+#### **(1) 读操作（SELECT）**
+
+- 普通 `SELECT`（非锁定读）：在默认的可重复读（REPEATABLE READ）隔离级别下，普通SELECT使用 MVCC（多版本并发控制），通过读取快照数据实现一致性读，不会加行锁，因此不会阻塞其他事务的读写操作。
+
+  例外：
+
+  - 若显式使用 `SELECT ... FOR UPDATE` 或 `SELECT ... LOCK IN SHARE MODE`，即使无索引，InnoDB 也会尝试逐行加锁（行级锁），可能导致锁竞争。
+
+**(2) 写操作（UPDATE/DELETE）**
+
+- **无索引的 `UPDATE` 或 `DELETE`**：
+  InnoDB 必须执行全表扫描来定位目标数据行。在此过程中：
+
+  - **逐行加锁**：对扫描到的每一行加 **排他锁（X Lock）**。
+  - 锁范围扩大：
+    - 在 **可重复读（REPEATABLE READ）** 隔离级别下，为了防止幻读，InnoDB 还会对扫描范围内的间隙加 **间隙锁（Gap Locks）**。
+    - 在 **读已提交（READ COMMITTED）** 隔离级别下，仅锁定实际存在的行，不加间隙锁。
+
+  **示例**：
+
+  ```sql
+  -- 假设表 `t` 的 `name` 列无索引
+  UPDATE t SET status = 1 WHERE name = 'Alice';
+  ```
+
+  - InnoDB 会扫描全表，对每一行 `name = 'Alice'` 的行加排他锁。
+  - 在可重复读隔离级别下，还会对扫描范围内的间隙加锁，阻塞其他事务插入符合条件的数据。
+
+### **2. 锁升级的风险**
+
+- **表级锁的错觉**：
+  虽然 InnoDB 是行级锁引擎，但无索引的全表扫描会导致逐行加锁。由于扫描过程需要访问所有行，**实际效果类似于锁住整个表**，其他事务的写操作可能被长时间阻塞。
+- **性能影响**：
+  大量行锁和间隙锁会增加锁竞争，降低并发性能，甚至引发死锁。
+
+### **3. 不同隔离级别下的锁差异**
+
+|    **隔离级别**     |                    **无索引写操作锁行为**                    |
+| :-----------------: | :----------------------------------------------------------: |
+| **READ COMMITTED**  |            仅对实际存在的行加排他锁，不加间隙锁。            |
+| **REPEATABLE READ** | 对实际存在的行加排他锁，并对扫描范围内的间隙加间隙锁（防止幻读）。 |
+
+**4. 如何诊断无索引查询的锁问题？**
+
+#### **(1) 查看锁信息**
+
+```sql
+-- 查看当前事务持有的锁（MySQL 8.0+）
+SELECT * FROM performance_schema.data_locks;
+-- 查看锁等待关系
+SELECT * FROM information_schema.INNODB_LOCK_WAITS;
+-- 查看正在运行的事务
+SELECT * FROM information_schema.INNODB_TRX;
+```
+
+**(2) 分析慢查询日志**
+
+启用慢查询日志，找出执行时间长的全表扫描操作：
+
+```sql
+-- 启用慢查询日志
+SET GLOBAL slow_query_log = 'ON';
+SET GLOBAL long_query_time = 2;  -- 定义慢查询阈值（秒）
+```
+
+**(3) 使用 `EXPLAIN` 检查索引使用**
+
+```sql
+EXPLAIN UPDATE t SET status = 1 WHERE name = 'Alice';
+```
+
+- 若 `key` 列为 `NULL`，说明未使用索引。
+
+### **5. 优化建议**
+
+**(1) 添加索引**
+
+- 为频繁查询的字段（尤其是 WHERE 条件中的字段）添加索引，避免全表扫描。
+
+  ```sql
+  ALTER TABLE t ADD INDEX idx_name (name);
+  ```
+
+**(2) 分批处理**
+
+- 将大范围更新拆分为小批次，减少单次锁持有时间：
+
+  ```sql
+  -- 每次更新 1000 行
+  UPDATE t SET status = 1 WHERE name = 'Alice' LIMIT 1000;
+  ```
+
+**(3) 调整隔离级别**
+
+- 若业务允许，使用读已提交（READ COMMITTED）隔离级别，减少间隙锁的使用：
+
+  ```sql
+  SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+  ```
+
+**(4) 避免长事务**
+
+- 及时提交事务，缩短锁的持有时间。
+
+**6. 总结**
+
+- **无索引或全表扫描的写操作（如 `UPDATE`/`DELETE`）会逐行加锁，并可能加间隙锁**，导致锁竞争和性能下降。
+- **读操作（普通 `SELECT`）通常不会加锁**，除非显式使用 `FOR UPDATE` 或 `LOCK IN SHARE MODE`。
+- **优化核心**：通过添加索引、分批处理、调整隔离级别等手段，减少锁的范围和持有时间，提升并发性能
+
+
+
+
+
+
+
 ## 二，Mysql 架构图
 
 https://dev.mysql.com/doc/refman/8.4/en/sys-host-summary.html
@@ -1446,8 +1785,6 @@ MySQL 选择 **B+Tree** 作为索引的默认数据结构，是因为它在数�
 
 ------
 
-### **5. 支持覆盖索引：减少回表**
-
-- **非叶子节点仅存键值**：若查询仅需索引字段（如 `SELECT id FROM table`），可直接通过 B+Tree 的非叶子节点返回结果，无需访问数据页（**覆盖索引**）。
+（**覆盖索引**用于**二级索引**，）。
 
 ==源码==
