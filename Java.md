@@ -1,3 +1,735 @@
+## 一，面试题
+
+- TreeMap和HashMap的区别. 
+- Arraylist和linkedlist的区别；
+- ==和equals
+- 深浅拷贝
+-  ==重要==hashmap底层原理
+- ==重要==cucrrentHashMap 底层
+- sybchronized的实现原理
+- 线程同步的方式
+- 了解多线程吗?
+- volatile的作用，什么是可见性和有序性
+
+
+
+
+
+
+
+## 2.1,TreeMap和HashMap的区别
+
+> 1. 底层实现机构
+> 2. 查询，插入，删除 时间复杂度
+> 3. 是否线程安全
+> 4. 排序
+> 5. 使用场景
+>
+> 
+>
+> treeMap 红黑树的实现（key 不能重复）
+
+### **1. 底层数据结构**
+
+- **HashMap**
+  基于 **哈希表**（数组 + 链表/红黑树）实现。
+  - Java 8 之前使用数组+链表，链表过长时退化为线性查找（时间复杂度 `O(n)`）。
+  - Java 8 之后，当链表长度超过阈值（默认 8）时，链表会转换为红黑树（时间复杂度优化为 `O(log n)`）。
+  - 依赖键的 `hashCode()` 和 `equals()` 方法进行数据存储和查找。
+- **TreeMap**
+  基于 **红黑树**（一种自平衡的二叉搜索树）实现。
+  - 所有操作（插入、删除、查找）的时间复杂度为 `O(log n)`。
+  - 依赖键的 **自然顺序** 或自定义的 `Comparator` 来维护键的有序性。
+
+------
+
+### **2. 有序性**
+
+- **HashMap**
+  - **不保证顺序**：插入和遍历的顺序可能不一致。
+  - 扩容时（如哈希表大小变化），原有顺序可能被打乱。
+  - 若需要有序性，可以使用 `LinkedHashMap`（保持插入顺序）。
+- **TreeMap**
+  - **保证键的有序性**：默认按键的 **自然顺序**（如字典序、数值大小）排序，或通过自定义 `Comparator` 指定顺序。
+  - 遍历时按排序后的顺序输出键值对。
+
+------
+
+### **3. 性能对比**
+
+|   **操作**    | **HashMap** |      **TreeMap**      |
+| :-----------: | :---------: | :-------------------: |
+| **插入/删除** | 平均 `O(1)` |      `O(log n)`       |
+|   **查找**    | 平均 `O(1)` |      `O(log n)`       |
+| **范围查询**  |   不支持    | 支持（如 `subMap()`） |
+
+- **HashMap** 在哈希冲突较少时性能更高，适合高频的插入、删除和随机查找。
+- **TreeMap** 适合需要有序遍历或范围查询的场景（如找最小/最大键、区间查询）。
+
+------
+
+### **4. 键（Key）的限制**
+
+- **HashMap**
+  - 允许键为 `null`。
+  - 依赖 `hashCode()` 和 `equals()` 方法，需确保键的哈希值稳定且唯一。
+- **TreeMap**
+  - 键 **不能为 `null`**（若使用自然排序，`null` 无法比较）。
+  - 若自定义 `Comparator` 允许 `null`，则可以支持，但需显式处理。
+  - 键必须实现 `Comparable` 接口，或构造时提供 `Comparator`。
+
+------
+
+### **5. 内存占用**
+
+- **HashMap**
+  - 哈希表的负载因子（默认 0.75）影响内存使用。
+  - 扩容时需重新哈希（耗时），但内存占用相对较低。
+- **TreeMap**
+  - 红黑树的每个节点需维护父节点、子节点和颜色信息，内存占用较高。
+
+------
+
+### **6. 典型应用场景**
+
+- **HashMap**
+  - 高频的插入、删除和随机查找。
+  - 不关心键的顺序。
+  - 例如：缓存、快速索引。
+- **TreeMap**
+  - 需要有序遍历键值对。
+  - 需要范围查询（如找某个区间内的键）。
+  - 例如：按时间戳排序的事件、字典序处理。
+
+
+
+## 2.2,Arraylist和linkedlist的区别
+
+> 共同点，相同点，底层实现结构，使用场景，不同场景下的推荐使用
+
+`ArrayList` 和 `LinkedList` 是 Java 中 `List` 接口的两种不同实现，它们在底层数据结构、性能特性及适用场景上有显著区别。以下是两者的核心差异总结：
+
+------
+
+### **1. 底层数据结构**
+
+|   **特性**   |           **ArrayList**           |             **LinkedList**             |
+| :----------: | :-------------------------------: | :------------------------------------: |
+| **数据结构** | 基于 **动态数组**（连续内存空间） |  基于 **双向链表**（非连续内存节点）   |
+| **内存占用** |       仅存储元素，内存紧凑        | 每个节点额外存储前后指针，内存开销更大 |
+| **扩容机制** | 初始容量默认10，按需扩容（1.5倍） |      无扩容机制，按需动态添加节点      |
+
+------
+
+### **2. 性能对比**
+
+#### **(1) 随机访问（按索引操作）**
+
+|     **操作**     |   **ArrayList**    |    **LinkedList**    |
+| :--------------: | :----------------: | :------------------: |
+| `get(int index)` | `O(1)`（直接定位） | `O(n)`（需遍历链表） |
+| `set(int index)` |       `O(1)`       |        `O(n)`        |
+
+**结论**：
+ArrayList 的随机访问性能远优于 LinkedList。
+
+------
+
+#### **(2) 插入与删除**
+
+|   **操作**   |        **ArrayList**        |        **LinkedList**        |
+| :----------: | :-------------------------: | :--------------------------: |
+| **尾部插入** | 平均 `O(1)`（可能触发扩容） | `O(1)`（直接修改尾节点指针） |
+| **头部插入** |  `O(n)`（需移动所有元素）   | `O(1)`（直接修改头节点指针） |
+| **中间插入** |  `O(n)`（需移动后续元素）   |  `O(n)`（需遍历到指定位置）  |
+| **删除元素** |  `O(n)`（需移动后续元素）   |  `O(n)`（需遍历到指定位置）  |
+
+**结论**：
+
+- **尾部操作**：两者性能接近（ArrayList 可能因扩容略慢）。
+- **头部/中间操作**：LinkedList 理论时间复杂度为 `O(n)`，但实际性能可能优于 ArrayList（无需移动元素）。
+- **实际场景**：ArrayList 的连续内存特性对 CPU 缓存更友好，高频插入/删除时可能表现更好。
+
+------
+
+#### **(3) 遍历性能**
+
+|  **遍历方式**  |   **ArrayList**    |    **LinkedList**    |
+| :------------: | :----------------: | :------------------: |
+| `for` 循环索引 | 快（直接内存访问） | 极慢（需逐节点遍历） |
+| **迭代器遍历** |         快         |  快（直接指针跳转）  |
+
+**结论**：
+
+- LinkedList 必须使用迭代器遍历，避免索引遍历。
+- ArrayList 的索引遍历和迭代器遍历性能接近。
+
+------
+
+### **3. 内存占用**
+
+|    **特性**    |           **ArrayList**            |        **LinkedList**        |
+| :------------: | :--------------------------------: | :--------------------------: |
+| **内存连续性** |         连续内存，缓存友好         |    非连续内存，缓存不友好    |
+|  **额外开销**  | 仅存储元素（扩容时可能有冗余空间） | 每个节点需存储前驱和后继指针 |
+
+**示例**：
+
+- 存储 1000 个Integer
+
+  对象：
+
+  - ArrayList：约占用 `1000 * 4字节`（假设压缩指针） + 数组头部开销。
+  - LinkedList：约占用 `1000 * (4 * 3字节)`（节点含数据、前驱、后继指针） + 链表头部开销。
+
+------
+
+### **4. 线程安全性**
+
+- **两者均非线程安全**：多线程环境下需自行同步（如使用 `Collections.synchronizedList`）。
+- 替代方案：
+  - 线程安全的动态数组：`CopyOnWriteArrayList`。
+  - 线程安全的链表：无直接实现，需手动加锁。
+
+------
+
+### **5. 适用场景**
+
+|        **场景**        | **推荐使用** |                           **原因**                           |
+| :--------------------: | :----------: | :----------------------------------------------------------: |
+|    **高频随机访问**    |  ArrayList   |            直接通过索引访问，时间复杂度 `O(1)`。             |
+|   **尾部插入/删除**    |  ArrayList   |                 性能接近 `O(1)`，内存紧凑。                  |
+| **头部/中间插入/删除** |  LinkedList  |         理论时间复杂度更低（实际需结合数据量测试）。         |
+|    **内存敏感场景**    |  ArrayList   |               无额外指针开销，内存利用率更高。               |
+|    **实现队列/栈**     |  LinkedList  | 直接支持 `Deque` 接口，提供 `addFirst()`, `removeLast()` 等方法。 |
+
+------
+
+### **总结**
+
+|   **维度**   |         **ArrayList**         |               **LinkedList**               |
+| :----------: | :---------------------------: | :----------------------------------------: |
+| **核心优势** | 随机访问、内存紧凑、遍历高效  |      头部/中间插入删除、动态扩展灵活       |
+| **核心劣势** | 插入/删除需移动元素、扩容开销 |           内存占用高、随机访问慢           |
+| **选择建议** | 大多数场景优先选择 ArrayList  | 需要频繁在头部/中间操作或实现队列/栈时选择 |
+
+
+
+## 2.3,==和equals（即基础又坑的）
+
+> 直接地址对比， 地址内的值对比
+
+在 Java 中，`==` 和 `equals()` 都用于比较操作，但它们的底层逻辑和适用场景有本质区别。以下是两者的核心差异和用法总结：
+
+------
+
+### **1. `==` 运算符**
+
+#### **(1) 基本数据类型比较**
+
+`==` 直接比较两个变量的 **值是否相等**（如 `int`、`char`、`boolean` 等）：
+
+```java
+int a = 5;
+int b = 5;
+System.out.println(a == b); // true（值相等）
+
+char c1 = 'A';
+char c2 = 'B';
+System.out.println(c1 == c2); // false（值不等）
+```
+
+#### **(2) 对象引用比较**
+
+`==` 比较两个对象的 **内存地址是否相同**（即是否指向同一个对象）：
+
+```java
+String s1 = new String("hello");
+String s2 = new String("hello");
+String s3 = s1;
+
+System.out.println(s1 == s2); // false（不同对象）
+System.out.println(s1 == s3); // true（同一对象）
+```
+
+------
+
+### **2. `equals()` 方法**
+
+#### **(1) 默认行为（未重写时）**
+
+`Object` 类中的 `equals()` 默认使用 `==` 比较内存地址：
+
+```java
+public boolean equals(Object obj) {
+    return (this == obj);
+}
+```
+
+#### **(2) 重写后的行为**
+
+大多数 Java 核心类（如 `String`、`Integer`、`Date`）已重写 `equals()`，改为比较 **对象内容是否逻辑相等**：
+
+```java
+String s1 = new String("hello");
+String s2 = new String("hello");
+System.out.println(s1.equals(s2)); // true（内容相同）
+
+Integer a = 100;
+Integer b = 100;
+System.out.println(a.equals(b)); // true（值相等）
+```
+
+#### **(3) 自定义类的 `equals()`**
+
+若需自定义类的对象按内容比较，需手动重写 `equals()`：
+
+```java
+class Person {
+    String name;
+    int age;
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Person person = (Person) obj;
+        return age == person.age && Objects.equals(name, person.name);
+    }
+}
+```
+
+------
+
+### **3. 关键区别总结**
+
+|   **维度**   |             **`==`**             |       **`equals()`**       |
+| :----------: | :------------------------------: | :------------------------: |
+| **比较对象** | 基本类型：值；对象类型：内存地址 |  对象内容（需重写后生效）  |
+| **重写影响** |             无法重写             |      可自定义比较逻辑      |
+|   **性能**   |         直接比较，速度快         | 可能涉及复杂逻辑，速度较慢 |
+| **典型应用** |      判断对象是否为同一实例      |  判断对象内容是否逻辑相等  |
+
+------
+
+### **4. 常见误区与注意事项**
+
+#### **(1) 字符串比较陷阱**
+
+```java
+String s1 = "hello";          // 字符串常量池中的对象
+String s2 = new String("hello"); // 堆中的新对象
+
+System.out.println(s1 == s2);           // false（内存地址不同）
+System.out.println(s1.equals(s2));      // true（内容相同）
+```
+
+#### **(2) 包装类比较陷阱**
+
+```java
+Integer a = 127;
+Integer b = 127;
+System.out.println(a == b);      // true（-128~127 的 Integer 对象被缓存）
+
+Integer c = 128;
+Integer d = 128;
+System.out.println(c == d);      // false（超出缓存范围，新建对象）
+System.out.println(c.equals(d)); // true（值相等）
+```
+
+#### **(3) 重写 `equals()` 必须重写 `hashCode()`**
+
+若两个对象 `equals()` 返回 `true`，它们的 `hashCode()` 必须相同：
+
+```java
+@Override
+public int hashCode() {
+    return Objects.hash(name, age); // 与 equals() 逻辑一致
+}
+```
+
+------
+
+### **5. 如何选择？**
+
+- **基本数据类型**：使用 `==` 比较值。
+- 对象引用：
+  - 若需判断是否为同一对象 → `==`
+  - 若需判断内容是否相等 → `equals()`（确保类已正确重写）
+- **自定义类**：按需重写 `equals()` 和 `hashCode()`。
+
+------
+
+### **总结**
+
+- `==` 是运算符，直接比较值或内存地址。
+- `equals()` 是方法，默认比较地址，重写后可按需比较内容。
+- 始终对对象使用 `equals()` 进行逻辑相等性判断（除非明确需要比较内存地址）。
+
+## 2.4,深浅拷贝
+
+在 Java 中，对象的拷贝分为 **浅拷贝（Shallow Copy）** 和 **深拷贝（Deep Copy）**，两者的核心区别在于对对象内部引用类型字段的处理方式。以下是详细对比和实现方法：
+
+------
+
+### **1. 浅拷贝（Shallow Copy）**
+
+#### **定义**
+
+- 仅复制对象本身（基本类型字段直接复制值，引用类型字段复制内存地址）。
+- 原对象和拷贝对象 **共享内部引用对象**，修改其中一个会影响另一个。
+
+#### **实现方式**
+
+- 默认的clone()
+
+  方法（需实现Cloneable接口）：
+
+  ```java
+  class Person implements Cloneable {
+      String name;
+      Address address; // 引用类型字段
+  
+      @Override
+      public Person clone() throws CloneNotSupportedException {
+          return (Person) super.clone(); // 默认浅拷贝
+      }
+  }
+  ```
+
+#### **示例**
+
+```java
+Person original = new Person("Alice", new Address("CityA"));
+Person copy = original.clone();
+
+// 修改拷贝对象的引用类型字段
+copy.address.city = "CityB";
+
+System.out.println(original.address.city); // 输出 "CityB"（原对象被影响）
+```
+
+------
+
+### **2. 深拷贝（Deep Copy）**
+
+#### **定义**
+
+- 递归复制对象及其所有引用对象，生成完全独立的副本。
+- 原对象和拷贝对象 **不共享任何引用对象**，修改互不影响。
+
+#### **实现方式**
+
+##### **(1) 手动重写 `clone()` 方法**
+
+为每个引用类型字段调用其 `clone()` 方法：
+
+```java
+class Address implements Cloneable {
+    String city;
+
+    @Override
+    public Address clone() throws CloneNotSupportedException {
+        return (Address) super.clone();
+    }
+}
+
+class Person implements Cloneable {
+    String name;
+    Address address;
+
+    @Override
+    public Person clone() throws CloneNotSupportedException {
+        Person copy = (Person) super.clone();
+        copy.address = this.address.clone(); // 深拷贝引用对象
+        return copy;
+    }
+}
+```
+
+##### **(2) 序列化与反序列化**
+
+通过对象流实现深拷贝（需所有对象实现 `Serializable` 接口）：
+
+```java
+import java.io.*;
+
+public class DeepCopyUtil {
+    public static <T> T deepCopy(T obj) throws IOException, ClassNotFoundException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(obj);
+
+        ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+        ObjectInputStream ois = new ObjectInputStream(bis);
+        return (T) ois.readObject();
+    }
+}
+
+// 使用示例
+Person original = new Person("Alice", new Address("CityA"));
+Person copy = DeepCopyUtil.deepCopy(original);
+```
+
+##### **(3) 第三方库**
+
+使用 Apache Commons Lang 的 `SerializationUtils` 或 Gson 等工具：
+
+```java
+// Apache Commons Lang
+Person copy = SerializationUtils.clone(original);
+
+// Gson
+Gson gson = new Gson();
+Person copy = gson.fromJson(gson.toJson(original), Person.class);
+```
+
+------
+
+### **3. 对比总结**
+
+|     **特性**     |             **浅拷贝**             |             **深拷贝**             |
+| :--------------: | :--------------------------------: | :--------------------------------: |
+| **引用类型字段** |    共享同一对象（内存地址相同）    |     创建新对象（内存地址不同）     |
+|     **性能**     |         高效（仅复制一层）         |    较低（递归复制所有引用对象）    |
+|  **实现复杂度**  |       简单（默认 `clone()`）       |   复杂（需手动处理所有引用对象）   |
+|   **适用场景**   | 引用对象不可变或无需隔离修改的场景 | 引用对象可变且需完全隔离修改的场景 |
+
+------
+
+### **4. 注意事项**
+
+1. **`Cloneable` 接口**：
+   - 仅是一个标记接口，无方法定义。
+   - 不实现 `Cloneable` 时调用 `clone()` 会抛出 `CloneNotSupportedException`。
+2. **深拷贝的递归性**：
+   - 需确保所有嵌套引用对象都支持拷贝（如实现 `clone()` 或可序列化）。
+3. **不可变对象**：
+   - 若引用对象是不可变的（如 `String`、`Integer`），浅拷贝是安全的。
+4. **性能权衡**：
+   - 深拷贝可能因递归复制和序列化导致性能下降，需根据场景选择。
+
+------
+
+### **5. 代码验证深拷贝**
+
+```java
+Person original = new Person("Alice", new Address("CityA"));
+Person copy = original.clone();
+
+// 修改拷贝对象的引用类型字段
+copy.address.city = "CityB";
+
+System.out.println(original.address.city); // 输出 "CityA"（原对象不受影响）
+```
+
+------
+
+### **总结**
+
+- **浅拷贝**：适用于引用对象不可变或无需隔离的场景，性能高。
+- **深拷贝**：适用于引用对象可变且需完全隔离的场景，实现复杂但安全。
+- 根据需求选择实现方式（手动 `clone()`、序列化、第三方库）。
+
+
+
+## 2.5,hashmap底层
+
+
+
+
+
+## 2.6,cucrrentHashMap 底层
+
+
+
+## 2.7,Synchronized的实现原理--（最装x）
+
+在 Java 中，`synchronized` 是实现线程同步的核心机制，其底层通过 **对象监视器（Monitor）** 和 **锁升级机制** 实现。以下是 `synchronized` 的实现原理详解：
+
+------
+
+### **1. 基本作用**
+
+`synchronized` 用于在多线程环境下保证 **原子性**、**可见性** 和 **有序性**，具体表现为：
+
+- **修饰代码块**：锁定指定对象。
+- **修饰实例方法**：锁定当前实例对象（`this`）。
+- **修饰静态方法**：锁定当前类的 `Class` 对象。
+
+------
+
+### **2. 底层实现：对象头与 Monitor**
+
+#### **(1) 对象头（Object Header）**
+
+每个 Java 对象在内存中分为三部分：
+
+- **Mark Word**：存储对象的哈希码、锁状态、GC 分代年龄等。
+- **Klass Pointer**：指向对象所属类的元数据。
+- **数组长度**（仅数组对象有）。
+
+**Mark Word 结构**（以 64 位 JVM 为例）：
+
+| **锁状态** |              **存储内容**               |
+| :--------: | :-------------------------------------: |
+|    无锁    |     哈希码、分代年龄、偏向模式（0）     |
+|   偏向锁   | 线程 ID、Epoch、分代年龄、偏向模式（1） |
+|  轻量级锁  |   指向栈中锁记录的指针（Lock Record）   |
+|  重量级锁  |         指向 Monitor 对象的指针         |
+|  GC 标记   |           空（用于垃圾回收）            |
+
+------
+
+#### **(2) Monitor（监视器锁）**
+
+- 本质：一个由 C++ 实现的
+
+   ObjectMonitor结构体，包含以下关键字段：
+
+  ```cpp
+  _owner：指向持有锁的线程。
+  _EntryList：等待锁的线程队列（阻塞状态）。
+  _WaitSet：调用 wait() 的线程队列（等待状态）。
+  _count：锁的重入次数。
+  ```
+
+- 工作流程：
+
+  1. 线程尝试通过 CAS 操作获取锁（修改 Mark Word）。
+  2. 成功则成为 Monitor 的 Owner。
+  3. 失败则进入 EntryList 阻塞等待。
+
+------
+
+### **3. 锁升级机制**
+
+JVM 为优化 `synchronized` 性能，设计了 **锁膨胀（Lock Inflation）** 过程，按竞争激烈程度逐步升级：
+
+#### **(1) 偏向锁（Biased Locking）**
+
+- **目的**：减少无竞争时的同步开销。
+- **触发条件**：对象未被任何线程锁定。
+- 实现：
+  - 将 Mark Word 中的线程 ID 设为当前线程。
+  - 后续同一线程进入同步代码时无需 CAS 操作。
+- **撤销**：当其他线程尝试获取锁时，升级为轻量级锁。
+
+#### **(2) 轻量级锁（Lightweight Locking）**
+
+- **目的**：减少多线程交替执行时的锁开销。
+- **触发条件**：锁竞争不激烈（无线程阻塞）。
+- 实现：
+  - 线程在栈帧中创建 Lock Record，拷贝对象 Mark Word。
+  - 通过 CAS 将对象头指向 Lock Record。
+  - 成功则获取锁，失败则自旋重试（自适应自旋）。
+- **升级**：自旋超过阈值或竞争加剧时，升级为重量级锁。
+
+#### **(3) 重量级锁（Heavyweight Locking）**
+
+- **目的**：处理高竞争场景。
+- 实现：
+  - 对象头指向 Monitor 对象。
+  - 未获取锁的线程进入 EntryList 阻塞等待。
+- **特点**：依赖操作系统互斥量（Mutex），上下文切换开销大。
+
+------
+
+### **4. 锁的存储位置**
+
+- **偏向锁/轻量级锁**：信息直接存储在对象头的 Mark Word 中。
+- **重量级锁**：对象头存储指向 Monitor 的指针，Monitor 存在于堆内存。
+
+------
+
+### **5. 锁的重入性**
+
+`synchronized` 是 **可重入锁**，同一线程可多次获取同一锁：
+
+- 每次获取锁时，Monitor 的 `_count` 计数器 +1。
+- 释放锁时 `_count` -1，直到为 0 时完全释放。
+
+------
+
+### **6. 优化技术**
+
+#### **(1) 自旋锁与适应性自旋**
+
+- **自旋锁**：线程在竞争锁时执行忙循环（自旋），避免直接阻塞。
+- **适应性自旋**：JVM 根据历史自旋成功率动态调整自旋时间。
+
+#### **(2) 锁消除（Lock Elimination）**
+
+JIT 编译器通过逃逸分析，移除不可能存在共享资源竞争的锁。
+
+```java
+// 示例：StringBuffer 的 append 方法是同步的，但此处 sb 未逃逸出方法
+public String localLock() {
+    StringBuffer sb = new StringBuffer();
+    sb.append("hello");
+    return sb.toString();
+}
+```
+
+#### **(3) 锁粗化（Lock Coarsening）**
+
+将相邻的同步代码块合并，减少锁的获取/释放次数。
+
+```java
+// 优化前
+synchronized (obj) { doA(); }
+synchronized (obj) { doB(); }
+
+// 优化后
+synchronized (obj) {
+    doA();
+    doB();
+}
+```
+
+------
+
+### **7. 性能对比**
+
+| **锁类型** |      **适用场景**      |    **开销**    |
+| :--------: | :--------------------: | :------------: |
+|   偏向锁   |       单线程访问       | 极低（仅 CAS） |
+|  轻量级锁  | 多线程交替执行，低竞争 |   低（自旋）   |
+|  重量级锁  |   高竞争，长时间阻塞   | 高（系统调用） |
+
+------
+
+### **8. 总结**
+
+- **核心机制**：通过对象头和 Monitor 实现锁状态管理。
+- **锁升级**：从偏向锁 → 轻量级锁 → 重量级锁，逐步适应竞争强度。
+- **优化手段**：自旋、锁消除、锁粗化等减少同步开销。
+- **适用场景**：低竞争时性能接近无锁，高竞争时依赖操作系统调度。
+
+理解 `synchronized` 的底层原理有助于编写高效的多线程代码，并在必要时选择更合适的并发工具（如 `ReentrantLock`）。
+
+## 2.8,线程同步的方式
+
+> java 体现实现线程同步方式很多，但是最核心可以分为三类，有三大基础，
+>
+> 1. synchronized
+> 2. cas
+> 3. lock- api
+
+
+
+## 2.9,多线程，线程池
+
+
+
+## 2.10,volatile的作用,什么是可见性和有序性
+
+
+
+
+
+
+
 # Java
 
 下载 oracle openjdk1.7 / oracle-openjdk-23

@@ -1,5 +1,22 @@
 
 
+Spring/springboot
+
+-  spring boot和spring的区别.
+-  spring boot启动过程都发生了什么.
+-  spring的依赖注入是怎么实现的?
+-  在一个方法中改变了注入对象的属性, 另一个方法调用该属性是否改变? 
+-  springboot中怎么开启定时任务，是同步的吗
+-  spring中bean的生命周期，作用域
+
+
+
+
+
+
+
+
+
 前置知识：
 
 gradle，junit 测试框架
