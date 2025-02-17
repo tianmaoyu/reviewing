@@ -36,29 +36,23 @@ jvm
 
 #### **工具与数据收集**
 
-- 基础工具
-
-  ：
+- 基础工具：
 
   - `jstat`：查看堆内存、GC次数、耗时（如 `jstat -gcutil <pid> 1000`）。
   - `jmap`：生成堆转储（Heap Dump）分析内存分布（`jmap -dump:format=b,file=heap.hprof <pid>`）。
   - `jstack`：抓取线程快照，排查死锁或线程阻塞问题。
   - `jcmd`：综合诊断工具（如 `jcmd <pid> VM.flags` 查看JVM参数）。
-
-- 可视化工具
-
-  ：
+  
+- 可视化工具：
 
   - **VisualVM**、**JConsole**：实时监控堆、线程、类加载情况。
   - **MAT（Memory Analyzer Tool）**：分析Heap Dump，定位内存泄漏。
   - **GCEasy**：在线分析GC日志，生成可视化报告。
-
-- GC日志
-
-  ：
+  
+- GC日志：
 
   - 启动参数中添加 `-Xloggc:/path/to/gc.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps`。
-  - 关注 `Full GC` 频率、`Young GC` 耗时、对象晋升老年代的速度。
+- 关注 `Full GC` 频率、`Young GC` 耗时、对象晋升老年代的速度。
 
 ------
 
@@ -68,16 +62,12 @@ jvm
 
 - **初始堆和最大堆**：`-Xms` 和 `-Xmx`（通常设置为相同值，避免动态调整开销）。
 
-- 新生代与老年代比例
-
-  ：
+- 新生代与老年代比例：
 
   - `-XX:NewRatio=2`（老年代:新生代=2:1）。
   - 新生代中Eden和Survivor比例：`-XX:SurvivorRatio=8`（Eden:Survivor=8:1:1）。
-
-- 元空间（Metaspace）
-
-  ：
+  
+- 元空间（Metaspace）：
 
   - `-XX:MetaspaceSize` 和 `-XX:MaxMetaspaceSize`（避免频繁Full GC）。
 
@@ -85,9 +75,7 @@ jvm
 
 - **吞吐量优先**：`-XX:+UseParallelGC`（Parallel Scavenge + Parallel Old）。
 
-- 低延迟优先
-
-  ：
+- 低延迟优先：
 
   - CMS：`-XX:+UseConcMarkSweepGC`（JDK 8及之前）。
   - G1：`-XX:+UseG1GC`（JDK 9+默认，适合大堆内存）。
@@ -223,10 +211,6 @@ JVM是Java生态的基石，通过抽象硬件层实现跨平台能力，同时�
 ### **一、类加载的总体流程**
 
 类加载过程分为 **加载（Loading）→ 连接（Linking）→ 初始化（Initialization）** 三个阶段，其中 **连接阶段** 又分为 **验证（Verification）→ 准备（Preparation）→ 解析（Resolution）** 三个子阶段。
-
-markdown
-
-复制
 
 ```
 1. 加载（Loading）
@@ -367,8 +351,9 @@ JVM 通过类加载器实现类的动态加载，采用 **双亲委派模型（P
   - 新生代：Eden 区（新对象分配区） + Survivor 区（存活对象暂存区）。
   - 老年代：长期存活对象。
 - **方法区（Metaspace）**：类元数据、常量池等（JDK8+ 取代 PermGen）。
-- **栈（Stack）**：线程私有的方法调用和局部变量。
-- **直接内存（Direct Memory）**：NIO 使用的堆外内存。
+- **虚拟机栈（Stack）**：线程私有的方法调用和局部变量。
+- 程序计数器：(program counter）
+- 本地方法栈：
 
 ------
 
@@ -973,7 +958,7 @@ JVM 的垃圾回收（Garbage Collection, GC）算法是内存管理的核心，
 
 
 
-## 2.10,怎么判断一个对象能否被回收
+## 2.10,==重点==怎么判断一个对象能否被回收
 
 VM 判断对象能否被回收的核心机制是 **可达性分析（Reachability Analysis）**，通过判断对象是否与 GC Roots 存在引用链来决定其存活状态。以下是具体实现细节和关键点：
 
