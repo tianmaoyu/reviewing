@@ -744,8 +744,6 @@ public void manualTransaction() {
 
 - **适用场景**：大多数情况下的默认选择，适用于需要在一个事务中执行多个操作的情况。
 
-- 示例：
-
   ```java
   @Transactional(propagation = Propagation.REQUIRED)
   public void methodA() {
@@ -771,8 +769,6 @@ public void manualTransaction() {
 
 - **适用场景**：适用于方法可以在有事务或无事务的情况下执行，且不强制要求事务的场景。
 
-- 示例：
-
   ```java
   @Transactional(propagation = Propagation.SUPPORTS)
   public void methodC() {
@@ -785,8 +781,6 @@ public void manualTransaction() {
 - **描述**：如果当前存在事务，则加入该事务；如果当前没有事务，则抛出异常。
 
 - **适用场景**：适用于方法必须在事务中执行，不允许在无事务的情况下调用的场景。
-
-- 示例：
 
   ```java
   @Transactional(propagation = Propagation.MANDATORY)
@@ -803,8 +797,6 @@ public void manualTransaction() {
 
 - **适用场景**：适用于需要独立于外部事务执行的方法，如日志记录、发送通知等。
 
-- 示例：
-
   ```java
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void methodE() {
@@ -820,8 +812,6 @@ public void manualTransaction() {
 
 - **适用场景**：适用于不需要事务支持的方法，如只读操作或某些性能优化场景。
 
-- 示例：
-
   ```java
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public void methodF() {
@@ -834,8 +824,6 @@ public void manualTransaction() {
 - **描述**：以非事务方式执行，如果当前存在事务，则抛出异常。
 
 - **适用场景**：适用于绝对不允许在事务中执行的方法。
-
-- 示例：
 
   ```java
   @Transactional(propagation = Propagation.NEVER)
@@ -851,8 +839,6 @@ public void manualTransaction() {
 - **描述**：如果当前存在事务，则在嵌套事务中执行；如果当前没有事务，则创建一个新的事务。嵌套事务是外部事务的一部分，可以独立提交或回滚，而不会影响外部事务。
 
 - **适用场景**：适用于需要在事务内部执行部分操作，且这些操作可以独立回滚的场景。
-
-- 示例：
 
   ```java
   @Transactional(propagation = Propagation.NESTED)
@@ -935,8 +921,6 @@ Spring解决循环依赖问题的方法主要有以下几种：
    如果循环依赖问题无法通过上述方法解决，那么可能需要重新设计类结构。你可以尝试将相互依赖的部分提取到一个新的类中，或者使用接口、抽象类等方式降低类之间的耦合度。
 
 总之，解决Spring中的循环依赖问题需要根据具体情况选择合适的方法。在大多数情况下，可以通过调整依赖注入方式、使用`@Lazy`注解或重新设计类结构来解决循环依赖问题。
-
-
 
 ```java
 @Component
