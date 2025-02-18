@@ -591,17 +591,473 @@ Spring提供了以下几种主要的Bean作用域：
 
 
 
-
-
 ## 2.10,Spring如何实现事务的管理？如何实现声明式事务？
+
+在 Spring 框架中，事务管理主要通过 **声明式事务管理** 和 **编程式事务管理** 两种方式实现。以下是详细实现方案：
+
+### 1. 配置事务管理器
+
+Spring 事务的核心是 `PlatformTransactionManager` 接口，针对不同持久化技术有不同的实现：
+
+```
+@Configuration
+@EnableTransactionManagement // 启用注解驱动的事务管理
+public class AppConfig {
+    @Bean
+    public DataSource dataSource() {
+        // 配置数据源（如 HikariCP、DBCP 等）
+        return new DriverManagerDataSource(...);
+    }
+    @Bean
+    public PlatformTransactionManager transactionManager() {
+        // 根据持久化技术选择实现类（如 JPA、JDBC、Hibernate 等）
+        return new DataSourceTransactionManager(dataSource());
+    }
+}
+```
+
+------
+
+### **2. 声明式事务（推荐）**
+
+通过 `@Transactional` 注解实现，基于 AOP 动态代理。
+
+#### **基本用法**
+
+```
+@Service
+public class UserService {
+    @Autowired
+    private UserRepository userRepository;
+
+    @Transactional
+    public void createUser(User user) {
+        userRepository.save(user);
+        // 其他数据库操作（自动在同一个事务中）
+    }
+}
+```
+
+#### **注解参数详解**
+
+```
+@Transactional(
+    propagation = Propagation.REQUIRED,    // 事务传播行为（默认：当前事务存在则加入，否则新建）
+    isolation = Isolation.DEFAULT,         // 隔离级别（默认使用数据库设置）
+    timeout = 30,                          // 超时时间（秒）
+    readOnly = false,                      // 是否只读事务（优化性能）
+    rollbackFor = Exception.class,         // 触发回滚的异常类型（默认仅对RuntimeException回滚）
+    noRollbackFor = NullPointerException.class // 不触发回滚的异常
+)
+public void transactionalMethod() { ... }
+```
+
+------
+
+### **3. 编程式事务**
+
+通过 `TransactionTemplate` 或直接使用 `PlatformTransactionManager` 手动控制事务。
+
+#### **使用 TransactionTemplate**
+
+```
+@Service
+public class OrderService {
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    public void processOrder() {
+        transactionTemplate.execute(status -> {
+            try {
+                // 业务逻辑（如多个DAO操作）
+                return true; // 提交事务
+            } catch (Exception e) {
+                status.setRollbackOnly(); // 标记回滚
+                return false;
+            }
+        });
+    }
+}
+```
+
+#### **直接使用 PlatformTransactionManager**
+
+```
+@Autowired
+private PlatformTransactionManager transactionManager;
+
+public void manualTransaction() {
+    TransactionDefinition definition = new DefaultTransactionDefinition();
+    TransactionStatus status = transactionManager.getTransaction(definition);
+
+    try {
+        // 执行业务操作
+        transactionManager.commit(status);
+    } catch (Exception e) {
+        transactionManager.rollback(status);
+        throw e;
+    }
+}
+```
+
+------
+
+### **4. 关键概念**
+
+- **传播行为（Propagation）**
+  如 `REQUIRED`、`REQUIRES_NEW`、`NESTED`，控制事务边界。
+- **隔离级别（Isolation）**
+  如 `READ_COMMITTED`、`SERIALIZABLE`，解决并发问题。
+- **回滚规则**
+  默认对 `RuntimeException` 和 `Error` 回滚，可通过 `rollbackFor` 自定义。
+
+------
+
+### **5. 常见问题**
+
+1. **自调用失效**
+   同一类内部方法调用 `@Transactional` 方法时，代理失效（需通过AOP代理对象调用）。
+2. **异常处理**
+   确保异常未被捕获或正确配置 `rollbackFor`。
+3. **多数据源事务**
+   需配置多个 `TransactionManager` 并使用 `@Transactional(value = "txManager2")`。
+
+------
+
+### **总结**
+
+- **声明式事务**：简洁高效，适合大多数场景。
+- **编程式事务**：灵活控制，适合复杂事务边界需求。
+
+通过合理配置传播行为和隔离级别，可以应对不同业务场景的事务需求。
+
+
+
+## Spring 事务的传播行为（了解即可）
+
+在Spring框架中，事务的传播行为（Propagation Behavior）定义了当一个事务方法被另一个事务方法调用时，应该如何处理事务。理解事务的传播行为对于设计健壮的事务管理机制至关重要。Spring提供了七种不同的事务传播行为，每种行为都有其特定的应用场景。
+
+### 1. **REQUIRED（默认）**
+
+- **描述**：如果当前存在事务，则加入该事务；如果当前没有事务，则创建一个新的事务。
+
+- **适用场景**：大多数情况下的默认选择，适用于需要在一个事务中执行多个操作的情况。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.REQUIRED)
+  public void methodA() {
+      // 业务逻辑
+      methodB();
+  }
+  
+  @Transactional(propagation = Propagation.REQUIRED)
+  public void methodB() {
+      // 业务逻辑
+  }
+  ```
+
+  在上述示例中，
+
+  ```
+  methodA 和methodB将在同一个事务中执行。
+  ```
+
+### 2. **SUPPORTS**
+
+- **描述**：如果当前存在事务，则加入该事务；如果当前没有事务，则以非事务方式执行。
+
+- **适用场景**：适用于方法可以在有事务或无事务的情况下执行，且不强制要求事务的场景。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.SUPPORTS)
+  public void methodC() {
+      // 业务逻辑
+  }
+  ```
+
+### 3. **MANDATORY**
+
+- **描述**：如果当前存在事务，则加入该事务；如果当前没有事务，则抛出异常。
+
+- **适用场景**：适用于方法必须在事务中执行，不允许在无事务的情况下调用的场景。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.MANDATORY)
+  public void methodD() {
+      // 业务逻辑
+  }
+  ```
+
+  如果methodD被一个非事务方法调用，将会抛出IllegalTransactionStateException。
+
+### 4. **REQUIRES_NEW**
+
+- **描述**：无论当前是否存在事务，都创建一个新的事务。如果当前存在事务，则将当前事务挂起。
+
+- **适用场景**：适用于需要独立于外部事务执行的方法，如日志记录、发送通知等。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void methodE() {
+      // 业务逻辑
+  }
+  ```
+
+  调用methodE时，会启动一个新的事务，而不会影响外部事务。
+
+### 5. **NOT_SUPPORTED**
+
+- **描述**：以非事务方式执行操作。如果当前存在事务，则将当前事务挂起。
+
+- **适用场景**：适用于不需要事务支持的方法，如只读操作或某些性能优化场景。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  public void methodF() {
+      // 业务逻辑
+  }
+  ```
+
+### 6. **NEVER**
+
+- **描述**：以非事务方式执行，如果当前存在事务，则抛出异常。
+
+- **适用场景**：适用于绝对不允许在事务中执行的方法。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.NEVER)
+  public void methodG() {
+      // 业务逻辑
+  }
+  ```
+
+  如果methodG被一个事务方法调用，将会抛出IllegalTransactionStateException。
+
+### 7. **NESTED**
+
+- **描述**：如果当前存在事务，则在嵌套事务中执行；如果当前没有事务，则创建一个新的事务。嵌套事务是外部事务的一部分，可以独立提交或回滚，而不会影响外部事务。
+
+- **适用场景**：适用于需要在事务内部执行部分操作，且这些操作可以独立回滚的场景。
+
+- 示例：
+
+  ```java
+  @Transactional(propagation = Propagation.NESTED)
+  public void methodH() {
+      // 业务逻辑
+  }
+  ```
+
+  methodH将在一个嵌套事务中执行，允许其独立于外部事务进行回滚。
+
+### 总结
+
+|   传播行为    |                   描述                   |            适用场景            |
+| :-----------: | :--------------------------------------: | :----------------------------: |
+|   REQUIRED    |     如果存在事务则加入，否则新建事务     |         大多数通用场景         |
+|   SUPPORTS    |    如果存在事务则加入，否则非事务执行    |         可选事务的方法         |
+|   MANDATORY   |       必须在事务中执行，否则抛异常       |       强制要求事务的方法       |
+| REQUIRES_NEW  |        总是新建事务，挂起当前事务        | 需要独立事务的方法，如日志记录 |
+| NOT_SUPPORTED |         非事务执行，挂起当前事务         |        不需要事务的方法        |
+|     NEVER     |       非事务执行，存在事务时抛异常       |  绝对不允许在事务中执行的方法  |
+|    NESTED     | 存在事务时在嵌套事务中执行，否则新建事务 |   需要部分操作独立回滚的场景   |
+
+### 使用建议
+
+- **默认使用REQUIRED**：大多数情况下，默认的`REQUIRED`传播行为已经足够满足需求。
+- **独立操作使用REQUIRES_NEW**：当某些操作需要独立于外部事务执行时，使用`REQUIRES_NEW`。
+- **避免不必要的嵌套**：`NESTED`传播行为虽然灵活，但可能会增加复杂性，应根据实际需求谨慎使用。
+- **明确事务边界**：通过合理的事务传播行为配置，确保事务边界清晰，避免事务过大或过小导致的数据一致性问题。
+
+理解并正确应用事务传播行为，有助于构建健壮、可维护且高效的事务管理机制，从而提升应用程序的整体质量和性能。
+
+
 
 ## 2.11,什么是Spring的Event机制？如何发布和监听事件？
 
+Spring 的 Event 机制主要基于观察者模式（Observer Pattern），其核心原理包括事件发布、事件监听和事件分发三个主要部分。下面详细介绍其实现原理：
+
+### 1. **事件对象（Event Object）**
+
+### 2.**事件发布者（Event Publisher）**
+
+### 3. **事件监听器（Event Listener）**
+
+
+
 ## 2.12,Spring如何支持异步编程？如何使用@Async注解实现异步任务
 
-## 2.13,Spring的循环依赖问题如何解决？如何使用三级缓存机制？
+Spring 通过多种方式支持异步编程，主要包括使用 `@Async` 注解、自定义线程池
+
+
+
+## 2.13,==重点==Spring的循环依赖问题如何解决？如何使用三级缓存机制？
+
+> 第一解决： 属性，setter 上的循环依赖： 三级缓存
+>
+> 第二解决：构造器上的循环依赖，@Lazy 懒加载
+>
+> 第三解决: 合理设计依赖关系
+>
+> 第四解决：把构造上的循环依赖，改成属性或者setter 依赖
+
+Spring框架中的循环依赖问题通常发生在两个或多个Bean相互依赖的情况下。例如，Bean A依赖于Bean B，而Bean B又依赖于Bean A。这种情况下，Spring容器无法确定Bean的创建顺序，从而导致循环依赖问题。
+
+Spring解决循环依赖问题的方法主要有以下几种：
+
+1. 三级缓存机制：
+   Spring容器在创建Bean的过程中，使用了三级缓存机制来解决循环依赖问题。这三级缓存分别是：
+
+- 一级缓存（singletonObjects）：存储已经创建好的单例Bean。
+- 二级缓存（earlySingletonObjects）：存储提前暴露的单例Bean的引用，用于解决循环依赖。
+- 三级缓存（singletonFactories）：存储Bean的工厂对象（BeanWrapper），用于创建Bean的代理对象。
+
+当Spring容器创建Bean时，首先会从一级缓存中查找是否已经存在该Bean。如果不存在，则创建一个新的Bean，并将其工厂对象放入三级缓存。接着，Spring容器会尝试注入该Bean的依赖。如果依赖的Bean也正在创建过程中，那么可以从三级缓存中获取该Bean的工厂对象，创建一个提前暴露的Bean引用，并将其放入二级缓存。这样，当依赖的Bean再次尝试注入当前Bean时，可以从二级缓存中获取到提前暴露的Bean引用，从而避免了循环依赖的问题。
+
+1. 使用构造器注入：
+   在某些情况下，可以通过使用构造器注入来解决循环依赖问题。构造器注入可以确保所有的依赖在Bean创建时就已注入，从而避免了循环依赖的问题。但是，这种方法可能会导致Bean的创建和依赖注入过程变得复杂，因此需要谨慎使用。
+2. 使用`@Lazy`注解：
+   在某些情况下，可以使用`@Lazy`注解来解决循环依赖问题。`@Lazy`注解可以让Spring容器延迟初始化Bean，直到该Bean被实际使用。这样，可以避免在创建Bean时就触发循环依赖的问题。你可以在依赖注入的地方（如构造器、setter方法或字段）使用`@Lazy`注解。
+3. 重新设计类结构：
+   如果循环依赖问题无法通过上述方法解决，那么可能需要重新设计类结构。你可以尝试将相互依赖的部分提取到一个新的类中，或者使用接口、抽象类等方式降低类之间的耦合度。
+
+总之，解决Spring中的循环依赖问题需要根据具体情况选择合适的方法。在大多数情况下，可以通过调整依赖注入方式、使用`@Lazy`注解或重新设计类结构来解决循环依赖问题。
+
+
+
+```java
+@Component
+public class BeanA {
+    private final BeanB beanB;
+
+    @Autowired
+    public BeanA(@Lazy BeanB beanB) {
+        this.beanB = beanB;
+    }
+}
+
+@Component
+public class BeanB {
+    private final BeanA beanA;
+
+    @Autowired
+    public BeanB(BeanA beanA) {
+        this.beanA = beanA;
+    }
+}
+```
+
+
+
+## 三级缓存机制解决循环依赖原理？
+
+> 三级缓存机制是用于解决**循环依赖**问题的核心机制。循环依赖指的是两个或多个Bean之间相互依赖，形成一个闭环，导致Spring容器无法正确地创建这些Bean。为了解决这一问题，Spring采用了三级缓存机制，通过分阶段管理和缓存Bean的不同状态，确保Bean能够正确地创建和注入依赖。
+
+Spring的三级缓存机制主要包括以下三个缓存：
+
+1. **一级缓存（singletonObjects）**：
+   - **作用**：存储已经完全初始化好的单例Bean实例。
+   - **特点**：只有在Bean完全创建并初始化完成后，才会被放入一级缓存中。
+2. **二级缓存（earlySingletonObjects）**：
+   - **作用**：存储早期暴露的单例Bean的引用，这些Bean可能尚未完成全部属性的注入。
+   - **特点**：用于解决循环依赖问题，允许其他Bean在当前Bean完全初始化之前引用它。
+3. **三级缓存（singletonFactories）**：
+   - **作用**：存储Bean的工厂对象（通常是`ObjectFactory`或`Supplier`），用于创建早期暴露的Bean引用/存储Bean的工厂对象（BeanWrapper），用于创建Bean的代理对象。。
+   - **特点**：通过工厂对象，可以在需要时动态创建早期Bean引用，进一步解耦Bean的创建过程。
+
+**工作流程**：
+
+1. 创建Bean A：
+   - Spring开始创建`BeanA`，并将其工厂对象存入三级缓存。
+2. 注入依赖Bean B：
+   - 在创建`BeanA`的过程中，发现需要注入`BeanB`。
+3. 创建Bean B：
+   - Spring开始创建`BeanB`，并将其工厂对象存入三级缓存。
+4. 注入依赖Bean A：
+   - 在创建`BeanB`的过程中，发现需要注入`BeanA`。
+5. 通过工厂对象获取Bean A：
+   - Spring检查一级缓存未发现`BeanA`，然后检查二级缓存也未发现，接着从三级缓存中获取`BeanA`的工厂对象，并通过该工厂创建`BeanA`的早期引用，将其存入二级缓存并注入到`BeanB`中。
+6. 完成Bean B的创建：
+   - `BeanB`创建完成后，被移入一级缓存。
+7. 完成Bean A的创建：
+   - `BeanA`完成全部属性注入后，被移入一级缓存。
+
+```java
+protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+    Object singletonObject = this.singletonObjects.get(beanName);
+    if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+        synchronized (this.singletonObjects) {
+            singletonObject = this.earlySingletonObjects.get(beanName);
+            if (singletonObject == null && allowEarlyReference) {
+                ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+                if (singletonFactory != null) {
+                    singletonObject = singletonFactory.getObject();
+                    this.earlySingletonObjects.put(beanName, singletonObject);
+                    this.singletonFactories.remove(beanName);
+                }
+            }
+        }
+    }
+    return singletonObject;
+}
+```
+
+
 
 ## 2.14,@Autowired和@Qualifier，@Value注解和@ConfigurationProperties，其他重要注解
+
+> 根据类别可以分为：
+>
+> 1. 组件相关
+> 2. 依赖注入
+> 3. java配置
+> 4. 属性注入
+> 5. 生命周期和作用域
+> 6. 事务相关
+> 7. 异步相关
+> 8. web相关
+
+| 注解                       | 所属分类         | 作用说明                                                     | 示例代码                                                     |
+| -------------------------- | ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **@Component**             | 组件扫描与管理   | 标识普通组件，被自动扫描并注册为 Bean                        | `@Component public class MyComponent { }`                    |
+| **@Service**               | 组件扫描与管理   | 标识业务层组件，语义化更明确                                 | `@Service public class UserService { }`                      |
+| **@Repository**            | 组件扫描与管理   | 标识持久层组件，同时支持数据访问异常转换                     | `@Repository public class UserRepository { }`                |
+| **@Controller**            | 组件扫描与管理   | 标识控制器组件，用于处理 HTTP 请求                           | `@Controller public class HomeController { }`                |
+| **@RestController**        | 组件扫描与管理   | 组合了 @Controller 与 @ResponseBody，专用于构建 RESTful API  | `@RestController public class ApiController { }`             |
+| **@Autowired**             | 依赖注入         | 根据类型自动注入 Bean                                        | `@Autowired private OrderRepository orderRepository;`        |
+| **@Qualifier**             | 依赖注入         | 当存在多个同类型 Bean 时指定具体要注入的 Bean                | `@Autowired @Qualifier("specificBean") private SomeService someService;` |
+| **@Resource**              | 依赖注入         | 通过名称或类型进行注入，属于 JSR-250 提供的注解              | `@Resource private UserService userService;`                 |
+| **@Configuration**         | Java 配置        | 声明配置类，替代 XML 配置，可用于定义 Bean                   | `@Configuration public class AppConfig { }`                  |
+| **@Bean**                  | Java 配置        | 在配置类中定义一个 Bean 并交由 Spring 管理                   | `@Bean public DataSource dataSource() { /* ... */ }`         |
+| **@ComponentScan**         | Java 配置        | 指定包路径，自动扫描并注册带有 @Component 及其派生注解的类   | `@ComponentScan("com.example.app")`                          |
+| **@Value**                 | 属性注入         | 注入外部化配置的属性值（例如配置文件中的值）                 | `@Value("${app.name}") private String appName;`              |
+| **@PropertySource**        | 属性注入         | 指定属性文件位置，加载外部配置                               | `@PropertySource("classpath:application.properties")`        |
+| **@Scope**                 | 作用域与生命周期 | 指定 Bean 的作用域（如 singleton、prototype 等）             | `@Scope("prototype") public class PrototypeBean { }`         |
+| **@Lazy**                  | 作用域与生命周期 | 延迟初始化 Bean，只有在首次使用时才创建                      | `@Lazy public class LazyBean { }`                            |
+| **@PostConstruct**         | 生命周期         | Bean 初始化后执行的方法                                      | `@PostConstruct public void init() { /* ... */ }`            |
+| **@PreDestroy**            | 生命周期         | Bean 销毁前执行的方法                                        | `@PreDestroy public void destroy() { /* ... */ }`            |
+| **@Transactional**         | 事务管理         | 声明式事务管理，确保方法在事务中执行                         | `@Transactional public void processPayment() { /* ... */ }`  |
+| **@SpringBootApplication** | Spring Boot      | 应用入口注解，组合了 @Configuration、@EnableAutoConfiguration 和 @ComponentScan | `@SpringBootApplication public class Application { public static void main(String[] args) { SpringApplication.run(Application.class, args); } }` |
+| **@RequestMapping**        | Web 请求映射     | 将 HTTP 请求映射到控制器的方法                               | `@RequestMapping("/users")`                                  |
+| **@GetMapping**            | Web 请求映射     | 映射 HTTP GET 请求                                           | `@GetMapping("/users")`                                      |
+| **@PostMapping**           | Web 请求映射     | 映射 HTTP POST 请求                                          | `@PostMapping("/users")`                                     |
+
+这个表格将 Spring 框架中常用的重要注解按类别整理，方便你快速了解每个注解的用途和使用示例。
+
+
 
 ## 2.15，`@Component`、`@Configuration` 和 `@Bean` 都用于定义 Bean，但它们的用途和适用场景有显著区别。
 
