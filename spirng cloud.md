@@ -1,3 +1,0 @@
--  spring boot和spring的区别.
--  spring boot启动过程都发生了什么.
--  springboot中怎么开启定时任务，是同步的吗
