@@ -1184,6 +1184,327 @@ protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 
 
 
+## ==重要== Spring 的启动流程
+
+### 一、容器初始化阶段
+
+**核心目标**：创建 `ApplicationContext` 实例并初始化环境。
+
+1. **ApplicationContext 实例化**
+   根据配置类型（如 `AnnotationConfigApplicationContext`、`ClassPathXmlApplicationContext`）创建上下文实例。
+
+   - **XML 配置**：解析 `applicationContext.xml`。
+   - **注解配置**：扫描 `@Configuration` 类或组件路径。
+
+2. **Environment 准备**
+   初始化环境变量（`Environment`），加载配置文件（如 `application.properties`）。
+
+   ```
+   // 示例：AnnotationConfigApplicationContext 初始化
+   ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
+   ```
+
+**阶段完成状态**：
+
+- `ApplicationContext` 实例创建完成。
+- 环境变量（`Environment`）就绪，配置文件已加载。
+
+------
+
+### 二、BeanFactory 准备与配置解析
+
+**核心目标**：初始化 Bean 工厂（`BeanFactory`），加载 Bean 定义。
+
+1. **创建 BeanFactory**
+   默认使用 `DefaultListableBeanFactory` 作为 IoC 容器的核心实现。
+2. **加载 Bean 定义（BeanDefinition）**
+   - **XML 配置**：通过 `XmlBeanDefinitionReader` 解析 XML。
+   - **注解配置**：通过 `ClassPathBeanDefinitionScanner` 扫描 `@Component`、`@Bean` 等。
+3. **注册内置 Bean**
+   如 `Environment`、`ResourceLoader`、`ApplicationEventPublisher` 等。
+
+**阶段完成状态**：
+
+- `BeanFactory` 初始化完成。
+- 所有 Bean 定义（`BeanDefinition`）已加载到 `BeanFactory`，但尚未实例化。
+
+------
+
+### 三、BeanFactory 后处理（BeanFactoryPostProcessor）
+
+**核心目标**：修改或扩展 Bean 定义。
+
+1. **调用 BeanFactoryPostProcessor**
+
+   - **关键处理器**：`ConfigurationClassPostProcessor`（解析 `@Configuration`、`@Bean`）。
+   - **典型应用**：属性占位符替换（`PropertySourcesPlaceholderConfigurer`）。
+
+   ```
+   // 示例：自定义 BeanFactoryPostProcessor
+   @Component
+   public class CustomBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
+       @Override
+   public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+           // 修改 BeanDefinition
+       }
+   }
+   ```
+
+**阶段完成状态**：
+
+- Bean 定义的最终形态确定（如占位符已替换）。
+- 所有 `BeanFactoryPostProcessor` 已执行。
+
+------
+
+### 四、BeanPostProcessor 注册
+
+**核心目标**：注册用于 Bean 实例化后处理的拦截器。
+
+1. **注册 BeanPostProcessor**
+
+   - **关键处理器**：
+     - `AutowiredAnnotationBeanPostProcessor`（处理 `@Autowired`、`@Value`）
+     - `CommonAnnotationBeanPostProcessor`（处理 `@PostConstruct`、`@PreDestroy`）
+     - `AsyncAnnotationBeanPostProcessor`（处理 `@Async`）
+
+   ```
+   // 示例：BeanPostProcessor 的优先级
+   beanFactory.addBeanPostProcessor(new AutowiredAnnotationBeanPostProcessor());
+   ```
+
+**阶段完成状态**：
+
+- 所有 `BeanPostProcessor` 实例已注册到 `BeanFactory`。
+- 后续 Bean 实例化时将自动应用这些处理器。
+
+------
+
+### 五、Bean 实例化与依赖注入
+
+**核心目标**：创建单例 Bean 实例并解决依赖。
+
+1. **预实例化单例 Bean**
+
+   - 按依赖顺序实例化非懒加载的单例 Bean。
+   - 处理构造函数注入、Setter 注入、字段注入（`@Autowired`）。
+
+2. **Bean 生命周期回调**
+
+   - 调用 `@PostConstruct` 方法。
+   - 执行 `InitializingBean#afterPropertiesSet()`。
+
+   ```
+   @Component
+   public class MyBean implements InitializingBean {
+       @PostConstruct
+       public void init() { /* 初始化逻辑 */ }
+   
+       @Override
+       public void afterPropertiesSet() { /* 属性设置后逻辑 */ }
+   }
+   ```
+
+**阶段完成状态**：
+
+- 所有非懒加载的单例 Bean 已实例化。
+- 依赖注入完成，Bean 处于可用状态。
+
+------
+
+### 六、上下文刷新完成与事件发布
+
+**核心目标**：完成启动并通知监听器。
+
+1. **初始化事件广播器**
+   注册 `ApplicationEventMulticaster`（默认 `SimpleApplicationEventMulticaster`）。
+
+2. **发布 ContextRefreshedEvent**
+   通知所有 `ApplicationListener` 上下文已就绪。
+
+   ```
+   context.publishEvent(new ContextRefreshedEvent(context));
+   ```
+
+3. **其他初始化**
+
+   - 初始化国际化组件（`MessageSource`）。
+   - 注册 Servlet 相关的 Bean（如 Web 应用中的 `DispatcherServlet`）。
+
+**阶段完成状态**：
+
+- 应用完全启动，所有 Bean 就绪。
+- 事件监听器可响应上下文事件。
+
+------
+
+### 七、应用运行与销毁
+
+**核心目标**：处理请求并优雅关闭。
+
+1. **处理请求**
+
+   - Web 应用中，`DispatcherServlet` 开始路由 HTTP 请求。
+
+2. **关闭时销毁 Bean**
+
+   - 调用 `@PreDestroy` 方法。
+   - 执行 `DisposableBean#destroy()`。
+
+   ```
+   context.registerShutdownHook(); // 注册 JVM 关闭钩子
+   ```
+
+------
+
+### 关键扩展点总结
+
+| 阶段            | 扩展接口                   | 作用                                |
+| :-------------- | :------------------------- | :---------------------------------- |
+| Bean 定义修改   | `BeanFactoryPostProcessor` | 修改 Bean 定义（如占位符替换）      |
+| Bean 实例化拦截 | `BeanPostProcessor`        | 在 Bean 初始化前后插入逻辑          |
+| 上下文事件监听  | `ApplicationListener`      | 响应 `ContextRefreshedEvent` 等事件 |
+
+通过理解这些阶段，开发者可以更精准地干预 Spring 容器的行为（如自定义 Bean 初始化逻辑、动态注册 Bean 等）。
+
+
+
+
+
+## 在Spring中实现自定义注解
+
+> 并在启动阶段为Bean属性赋值，可以通过以下步骤完成：
+
+### 步骤 1：定义自定义注解
+
+```
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target({ElementType.TYPE, ElementType.FIELD}) // 可标注在类或字段上
+@Retention(RetentionPolicy.RUNTIME) // 运行时保留
+public @interface CustomValue {
+    String value() default ""; // 可定义默认值或配置属性
+}
+```
+
+------
+
+### 步骤 2：创建处理注解的 `BeanPostProcessor`
+
+```
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.stereotype.Component;
+import java.lang.reflect.Field;
+
+@Component
+public class CustomValueProcessor implements BeanPostProcessor {
+
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        Class<?> beanClass = bean.getClass();
+        
+        // 处理类上的注解（可选）
+        if (beanClass.isAnnotationPresent(CustomValue.class)) {
+            // 类级别注解处理逻辑
+        }
+
+        // 处理字段上的注解
+        for (Field field : beanClass.getDeclaredFields()) {
+            if (field.isAnnotationPresent(CustomValue.class)) {
+                CustomValue annotation = field.getAnnotation(CustomValue.class);
+                field.setAccessible(true); // 允许访问私有字段
+                try {
+                    // 根据注解值设置字段
+                    field.set(bean, annotation.value());
+                } catch (IllegalAccessException e) {
+                    throw new RuntimeException("Failed to set field value", e);
+                }
+            }
+        }
+        return bean;
+    }
+}
+```
+
+
+
+### 步骤 3：使用注解标注Bean
+
+```
+import org.springframework.stereotype.Component;
+
+@Component
+public class MyService {
+
+    @CustomValue("Hello, World!") // 标注字段
+    private String message;
+
+    public void printMessage() {
+        System.out.println(message); // 输出：Hello, World!
+    }
+}
+```
+
+### 步骤 4：验证结果
+
+```
+@SpringBootApplication
+public class DemoApplication implements CommandLineRunner {
+
+    @Autowired
+    private MyService myService;
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);
+    }
+
+    @Override
+    public void run(String... args) {
+        myService.printMessage(); // 输出：Hello, World!
+    }
+}
+```
+
+------
+
+### 关键点说明
+
+1. **注解定义**：
+
+   - 使用 `@Retention(RetentionPolicy.RUNTIME)` 确保注解在运行时可见。
+   - 通过 `@Target` 指定注解可标记的位置（类、字段等）。
+
+2. **BeanPostProcessor**：
+
+   - 实现 `postProcessBeforeInitialization` 方法，在Bean初始化前修改属性。
+   - 使用反射 (`Field.set()`) 动态设置字段值。
+
+3. **字段赋值**：
+
+   - 直接通过注解的value()设置值，或结合Environment读取配置文件：
+
+     ```
+     @Autowired
+     private Environment env;
+     
+     // 在处理器中解析属性
+     String value = env.resolvePlaceholders(annotation.value());
+     field.set(bean, value);
+     ```
+
+4. **高级用法**：
+
+   - 结合 `@Conditional` 实现条件化Bean注册。
+   - 使用 `BeanFactoryPostProcessor` 修改Bean定义（`BeanDefinition`）。
+
+
+
+
+
 前置知识：
 
 gradle，junit 测试框架
