@@ -129,7 +129,7 @@ Spring
    - **作用**：
      - 支持单元测试与集成测试，提供`Mock`对象和注解（如`@SpringBootTest`）。
      - 集成JUnit、TestNG等测试框架
-6. **Security**：
+6. **Security**：**Spring Security** ：
    - 提供全面的安全框架，用于认证、授权、攻击防护等功能。
 
 
