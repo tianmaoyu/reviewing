@@ -425,11 +425,40 @@ LoadBalancer 的负载均衡实现与 Ribbon 类似，但更加模块化和现�
 
 ##  
 
-## **如何实现服务降级？**
+## 如何实现服务降级？
+
+> - Sentinel 
+> - Hystrix
+> - OpenFign（callback）
+> - Resilience4j
+
+在 **Sentinel** 中，**流量控制（Flow Control）** 和 **熔断降级（Circuit Breaking）** 是保障系统稳定性的两大核心机制，但它们的应用场景和实现原理不同。
+
+
+
+### 限流常用算法
+
+| 算法         | 优点                                 | 缺点                                     | 适用场景                           |
+| ------------ | ------------------------------------ | ---------------------------------------- | ---------------------------------- |
+| 固定窗口算法 | 实现简单，易于理解。                 | 时间窗口切换时，可能出现瞬时流量突增。   | 简单限流需求，允许偶发的流量峰值。 |
+| 滑动窗口算法 | 平滑流量控制，避免流量突增。         | 实现复杂度较高。                         | 需要精准、平滑流量控制的场景。     |
+| 令牌桶算法   | 支持突发流量处理，平滑整体请求速率。 | 实现复杂度高，需处理令牌生成和消耗速率。 | 突发流量处理，如秒杀场景。         |
+| 漏桶算法     | 严格控制请求处理速率，防止系统过载。 | 无法处理突发流量，超限请求直接丢弃。     | 严格限速控制的场景。               |
+
+### 示例对比
+
+假设我们有一个电商网站，正在进行大促销活动。在促销期间，系统需要控制 API 请求的并发数量，以避免因过载而导致系统崩溃。我们设定每秒最多允许 100 个请求通过。
+
+- **固定窗口算法**: 短时间内可能出现 200 个请求，导致系统压力。
+- **滑动窗口算法**: 任意 1 秒的滑动窗口内最多处理 100 个请求，避免流量突增。
+- **令牌桶算法**: 支持突发流量处理，允许短时内超出限额，但会回归平稳速率。
+- **漏桶算法**: 严格按每秒 100 个请求的速率处理，超出部分被丢弃。
+
+
+
+
 
 ## **如何保证微服务的安全性？**
-
-
 
 -  **OAuth2**：实现身份认证与授权。
 - **Spring Cloud Security** 
@@ -1116,7 +1145,228 @@ RestTemplate、Feign 和 OpenFeign 是 Java 中用于实现 HTTP 客户端通信
 
 
 
-## Seata支持的分布式事务模式？
+##  ==重要== Seata支持的分布式事务模式？
 
 AT（自动补偿）、TCC（手动补偿）、Saga（长事务）模式
 
+
+
+### 1. **AT 模式（Automatic Transaction Mode）**
+
+- **原理** ： AT 模式是 Seata 的默认模式，也是最常用的一种模式。它的核心思想是通过对业务 SQL 进行拦截和解析，自动生成回滚日志（Undo Log），从而实现分布式事务的两阶段提交。
+
+  **两阶段提交过程** ：
+
+  - **第一阶段（Try 阶段）** ：
+    - 业务 SQL 执行时，Seata 会拦截 SQL 并解析出需要操作的数据。
+    - 在本地事务中，除了执行业务 SQL 外，还会记录一条 Undo Log（用于后续回滚）。
+    - 如果所有分支事务的第一阶段都成功，则进入第二阶段；否则，进行回滚。
+  - **第二阶段（Commit 或 Rollback 阶段）** ：
+    - **Commit** ：如果全局事务协调器（TM）决定提交事务，则删除 Undo Log。
+    - **Rollback** ：如果全局事务协调器决定回滚事务，则根据 Undo Log 中记录的数据，将数据恢复到事务开始前的状态。
+
+- **优点** ：
+
+  - 对业务代码无侵入，开发者无需手动编写事务管理代码。
+  - 支持自动化的两阶段提交和回滚。
+
+- **缺点** ：
+
+  - 需要对数据库表结构进行一定的改造（如添加全局事务 ID 字段）。
+  - 性能上可能会有一定的开销，因为需要额外记录 Undo Log。
+
+### 1. **准备工作**
+
+#### 1.1 安装 Seata Server
+
+Seata Server 是一个独立的服务，负责协调全局事务。你需要先下载并启动 Seata Server。
+
+
+
+#### 1.2 数据库准备
+
+AT 模式需要在数据库中创建两张表：
+
+- `undo_log` 表：用于记录回滚日志。
+- 全局事务表（可选）：如果使用数据库存储模式，还需要创建 `global_table` 和 `branch_table`。
+
+
+
+#### 1.3 配置 Seata Client
+
+在微服务项目中引入 Seata 客户端依赖，并配置相关参数。
+
+
+
+------
+
+### 2. **引入依赖**
+
+在你的微服务项目中，添加 Seata 相关的依赖。以 Spring Boot 为例：
+
+
+
+------
+
+### 3. **配置文件**
+
+在 `application.yml` 或 `application.properties` 中配置 Seata。
+
+#### 3.1 配置 Seata Server 地址
+
+```yaml
+seata:
+  enabled: true
+  tx-service-group: my_tx_group # 自定义事务组名
+  service:
+    vgroup-mapping:
+      my_tx_group: default # 映射到 Seata Server 的事务组
+    grouplist:
+      default: 127.0.0.1:8091 # Seata Server 地址
+  registry:
+    type: file # 注册中心类型，支持 file、nacos、eureka 等
+  config:
+    type: file # 配置中心类型
+```
+
+
+
+#### 3.2 数据源代理
+
+Seata 的 AT 模式需要对数据源进行代理，因此需要将数据源配置为 Seata 提供的代理数据源。
+
+```java
+import com.alibaba.druid.pool.DruidDataSource;
+import io.seata.rm.datasource.DataSourceProxy;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
+@Configuration
+public class DataSourceConfig {
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource")
+    public DruidDataSource druidDataSource() {
+        return new DruidDataSource();
+    }
+    @Bean
+    public DataSource dataSource(DruidDataSource druidDataSource) {
+        // 使用 Seata 的数据源代理
+        return new DataSourceProxy(druidDataSource);
+    }
+
+    @Bean
+    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+}
+```
+
+
+
+### 4. **开启分布式事务**
+
+在需要使用分布式事务的方法上，添加 `@GlobalTransactional` 注解。
+
+#### 示例代码
+
+假设我们有两个服务：`OrderService` 和 `InventoryService`，分别负责订单创建和库存扣减。
+
+##### OrderService
+
+```
+import io.seata.spring.annotation.GlobalTransactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    @GlobalTransactional(name = "create-order", rollbackFor = Exception.class)
+    public void createOrder(String orderId, String productId, int count) {
+        // 1. 创建订单
+        System.out.println("创建订单：" + orderId);
+
+        // 2. 调用库存服务扣减库存
+        inventoryService.reduceStock(productId, count);
+
+        // 模拟异常
+        if (count <= 0) {
+            throw new RuntimeException("库存数量不能小于等于 0");
+        }
+    }
+}
+```
+
+```java
+import io.seata.core.context.RootContext;
+import io.seata.tm.api.GlobalTransaction;
+import io.seata.tm.api.GlobalTransactionContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    public void createOrder(String orderId, String productId, int count) {
+        // 获取全局事务对象
+        GlobalTransaction tx = GlobalTransactionContext.getCurrentOrCreate();
+
+        try {
+            // 开启全局事务
+            tx.begin();
+
+            System.out.println("XID: " + RootContext.getXID()); // 打印全局事务 ID
+
+            // 1. 创建订单
+            System.out.println("创建订单：" + orderId);
+
+            // 2. 调用库存服务扣减库存
+            inventoryService.reduceStock(productId, count);
+
+            // 模拟异常
+            if (count <= 0) {
+                throw new RuntimeException("库存数量不能小于等于 0");
+            }
+
+            // 提交全局事务
+            tx.commit();
+        } catch (Exception e) {
+            // 回滚全局事务
+            tx.rollback();
+            System.err.println("事务回滚：" + e.getMessage());
+        }
+    }
+}
+```
+
+
+
+------
+
+### 5. **运行流程**
+
+1. 当调用 `OrderService.createOrder()` 方法时，Seata 会自动开启一个全局事务，并生成一个全局事务 ID（XID）。
+2. 在执行业务 SQL 时，Seata 会拦截 SQL 并生成 Undo Log。
+3. 如果所有分支事务都成功，则提交全局事务；如果有任何分支事务失败，则回滚全局事务，Seata 会根据 Undo Log 恢复数据。
+
+------
+
+### 6. **注意事项**
+
+1. **事务传播行为** ：
+   - `@GlobalTransactional` 默认只支持 `REQUIRED` 传播行为，不支持嵌套事务。
+2. **幂等性** ：
+   - 在某些场景下，Confirm 和 Cancel 操作可能被多次调用，因此需要保证这些操作的幂等性。
+3. **性能优化** ：
+   - AT 模式会对业务 SQL 进行拦截和解析，可能会有一定的性能开销。可以通过减少事务范围、优化 SQL 等方式提升性能。
+4. **数据库兼容性** ：
+   - AT 模式目前支持 MySQL、Oracle、PostgreSQL 等主流数据库，但需要确保数据库支持事务。
