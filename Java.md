@@ -1,5 +1,6 @@
 ## 一，面试题
 
+- 
 - TreeMap和HashMap的区别. 
 - Arraylist和linkedlist的区别；
 - ==和equals
@@ -10,6 +11,188 @@
 - 线程同步的方式
 - 了解多线程吗?
 - volatile的作用，什么是可见性和有序性
+
+## Java 中的几种基本数据类型了解么？
+
+
+
+### 1. **整数类型**
+
+- `byte`：8 位有符号整数，取值范围为 `-128` 到 `127`。
+- `short`：16 位有符号整数，取值范围为 `-32,768` 到 `32,767`。
+- `int`：32 位有符号整数，取值范围为 `-2^31` 到 `2^31 - 1`（即 `-2,147,483,648` 到 `2,147,483,647`）。
+- `long`：64 位有符号整数，取值范围为 `-2^63` 到 `2^63 - 1`。定义时需要加上 `L` 或 `l` 后缀，例如 `long num = 100L;`。
+
+### 2. **浮点类型**
+
+- `float`：32 位单精度浮点数，取值范围约为 `±3.4e-38` 到 `±3.4e+38`。定义时需要加上 `F` 或 `f` 后缀，例如 `float num = 3.14F;`。
+- `double`：64 位双精度浮点数，取值范围约为 `±1.7e-308` 到 `±1.7e+308`。默认的浮点类型是 `double`，例如 `double num = 3.14;`。
+
+### 3. **字符类型**
+
+- `char`：16 位无符号 Unicode 字符，取值范围为 `\u0000` 到 `\uffff`（即 `0` 到 `65,535`）。例如 `char ch = 'A';`。
+
+### 4. **布尔类型**
+
+- `boolean`：表示逻辑值，只有两个取值：`true` 或 `false`。例如 `boolean flag = true;`。
+
+------
+
+### 总结
+
+Java 的 8 种基本数据类型如下：
+
+| 数据类型  | 位数 |    取值范围或说明     |
+| :-------: | :--: | :-------------------: |
+|  `byte`   |  8   |    `-128` 到 `127`    |
+|  `short`  |  16  | `-32,768` 到 `32,767` |
+|   `int`   |  32  | `-2^31` 到 `2^31 - 1` |
+|  `long`   |  64  | `-2^63` 到 `2^63 - 1` |
+|  `float`  |  32  |     单精度浮点数      |
+| `double`  |  64  |     双精度浮点数      |
+|  `char`   |  16  |     Unicode 字符      |
+| `boolean` |  1   |   `true` 或 `false`   |
+
+------
+
+### 注意事项
+
+1. **默认值**：在类中定义的成员变量（非局部变量）有默认值，例如 `int` 默认值为 `0`，`boolean` 默认值为 `false`。
+2. **包装类**：每种基本数据类型都有对应的包装类（如 `Integer`、`Double` 等），用于在需要对象的地方使用。
+3. **自动装箱和拆箱**：Java 支持基本数据类型和其包装类之间的自动转换。
+
+希望这些信息对你有帮助！如果有其他问题，欢迎继续提问。
+
+
+
+1. 注意== ：Integer  在-128 -127 之间是使用缓存
+
+1. Java 里使用 `long` 类型的数据一定要在数值后面加上 **L**，否则将作为整型解析。
+2. Java 里使用 `float` 类型的数据一定要在数值后面加上 **f 或 F**，否则将无法通过编译。
+3. `char a = 'h'`char :单引号，`String a = "hello"` :双引号。
+
+这八种基本类型都有对应的包装类分别为：`Byte`、`Short`、`Integer`、`Long`、`Float`、`Double`、`Character`、`Boolean` 。
+
+
+
+### 基本类型和包装类型的区别
+
+**用途**：除了定义一些常量和局部变量之外，我们在其他地方比如方法参数、对象属性中很少会使用基本类型来定义变量。并且，包装类型可用于泛型，而基本类型不可以。
+
+**存储方式**：基本数据类型的局部变量存放在 Java 虚拟机栈中的局部变量表中，基本数据类型的成员变量（未被 `static` 修饰 ）存放在 Java 虚拟机的堆中。包装类型属于对象类型，我们知道几乎所有对象实例都存在于堆中。
+
+**占用空间**：相比于包装类型（对象类型）， 基本数据类型占用的空间往往非常小。
+
+**默认值**：成员变量包装类型不赋值就是 `null` ，而基本类型有默认值且不是 `null`。
+
+**比较方式**：对于基本数据类型来说，`==` 比较的是值。对于包装数据类型来说，`==` 比较的是对象的内存地址。所有整型包装类对象之间值的比较，全部使用 `equals()` 方法。
+
+------
+
+**基本数据类型存放在栈中是一个常见的误区！** 基本数据类型的存储位置取决于它们的作用域和声明方式。如果它们是局部变量，那么它们会存放在栈中；如果它们是成员变量，那么它们会存放在堆/方法区/元空间中。
+
+```java
+public class Test {
+    // 成员变量，存放在堆中
+    int a = 10;
+    // 被 static 修饰的成员变量，JDK 1.7 及之前位于方法区，1.8 后存放于元空间，均不存放于堆中。
+    // 变量属于类，不属于对象。
+    static int b = 20;
+
+    public void method() {
+        // 局部变量，存放在栈中
+        int c = 30;
+        static int d = 40; // 编译错误，不能在方法中使用 static 修饰局部变量
+    }
+}
+```
+
+
+
+### 包装类型的缓存机制了解么？
+
+Java 基本数据类型的包装类型的大部分都用到了缓存机制来提升性能。
+
+`Byte`,`Short`,`Integer`,`Long` 这 4 种包装类默认创建了数值 **[-128，127]** 的相应类型的缓存数据，`Character` 创建了数值在 **[0,127]** 范围的缓存数据，`Boolean` 直接返回 `True` or `False`。
+
+**Integer 缓存源码：**
+
+```
+public static Integer valueOf(int i) {
+    if (i >= IntegerCache.low && i <= IntegerCache.high)
+        return IntegerCache.cache[i + (-IntegerCache.low)];
+    return new Integer(i);
+}
+private static class IntegerCache {
+    static final int low = -128;
+    static final int high;
+    static {
+        // high value may be configured by property
+        int h = 127;
+    }
+}
+```
+
+### 自动装箱与拆箱了解吗？原理是什么？
+
+**什么是自动拆装箱？**
+
+- **装箱**：将基本类型用它们对应的引用类型包装起来；
+- **拆箱**：将包装类型转换为基本数据类型；
+
+```
+Integer i = 10;  //装箱
+int n = i;   //拆箱
+```
+
+```java
+   L1
+    LINENUMBER 8 L1
+    ALOAD 0
+    BIPUSH 10
+    INVOKESTATIC java/lang/Integer.valueOf (I)Ljava/lang/Integer;
+    PUTFIELD AutoBoxTest.i : Ljava/lang/Integer;
+   L2
+    LINENUMBER 9 L2
+    ALOAD 0
+    ALOAD 0
+    GETFIELD AutoBoxTest.i : Ljava/lang/Integer;
+    INVOKEVIRTUAL java/lang/Integer.intValue ()I
+    PUTFIELD AutoBoxTest.n : I
+    RETURN
+```
+
+- `Integer i = 10` 等价于 `Integer i = Integer.valueOf(10)`
+- `int n = i` 等价于 `int n = i.intValue()`;
+
+
+
+### 重载和重写有什么区别？
+
+> 重载就是同样的一个方法能够根据输入数据的不同，做出不同的处理
+>
+> 重写就是当子类继承自父类的相同方法，输入数据一样，但要做出有别于父类的响应时，你就要覆盖父类方法
+
+```java
+public class VariableLengthArgument {
+
+    public static void printVariable(String... args) {
+        for (String s : args) {
+            System.out.println(s);
+        }
+    }
+    // 固定参数优先
+    public static void printVariable(String arg1, String arg2) {
+        System.out.println(arg1 + arg2);
+    }
+
+    public static void main(String[] args) {
+        printVariable("a", "b");
+        printVariable("a", "b", "c", "d");
+    }
+}
+
+```
 
 
 
