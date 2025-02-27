@@ -2534,3 +2534,202 @@ OpenJDK Runtime Environment (build 23.0.1+11-39)
 
 ### 5, `stop-the-word`，调优参数`jstack` `jmap` 工具等
 
+
+
+
+
+## 存储屏障：
+
+sun.misc.Unsafe 类中提供了 三个方法。storeFence，loadFence
+
+> 1. **防止指令重排序** ：在现代处理器架构中，为了优化性能，编译器和 CPU 可能会对指令进行重排序。这种重排序在单线程环境下通常是安全的，但在多线程环境下可能导致不可预期的行为。
+> 2. **保证可见性** ：在多核处理器中，每个核心都有自己的缓存。如果没有适当的同步机制，一个线程对共享变量的修改可能不会立即对其他线程可见。
+
+```java
+public native void loadFence();
+public native void storeFence();
+public native void fullFence();
+```
+
+实列
+
+```java
+import sun.misc.Unsafe;
+
+import java.lang.reflect.Field;
+
+public class StoreFenceExample {
+    private static final Unsafe unsafe;
+
+    static {
+        try {
+            Field field = Unsafe.class.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            unsafe = (Unsafe) field.get(null);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private int x = 0;
+    private int y = 0;
+
+    public void write() {
+        x = 42; // 写操作 1
+        unsafe.storeFence(); // 插入存储屏障
+        y = 1;  // 写操作 2
+    }
+
+    public int read() {
+        if (y == 1) { // 读操作 1
+            return x;  // 读操作 2
+        }
+        return 0;
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        StoreFenceExample example = new StoreFenceExample();
+        Thread writer = new Thread(() -> example.write());
+        Thread reader = new Thread(() -> System.out.println(example.read()));
+
+        writer.start();
+        reader.start();
+
+        writer.join();
+        reader.join();
+    }
+}
+```
+
+#### **解释**
+
+- 在 `write()` 方法中，`x = 42` 和 `y = 1` 是两个写操作。
+- `unsafe.storeFence()` 确保了 `x = 42` 在 `y = 1` 之前完成。
+- 在 `read()` 方法中，如果 `y == 1`，则可以安全地读取 `x` 的值，因为存储屏障保证了写操作的顺序性。
+
+
+
+
+
+## Synchronied vs Unsafe.monitorEnter
+
+```java
+import sun.misc.Unsafe;
+
+import java.lang.reflect.Field;
+
+public class MonitorExample {
+    private static final Unsafe unsafe;
+
+    static {
+        try {
+            Field field = Unsafe.class.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            unsafe = (Unsafe) field.get(null);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private final Object lock = new Object();
+    private int sharedValue = 0;
+
+    public void increment() {
+        unsafe.monitorEnter(lock); // 获取锁
+        try {
+            sharedValue++; // 修改共享变量
+        } finally {
+            unsafe.monitorExit(lock); // 释放锁
+        }
+    }
+
+    public int getValue() {
+        unsafe.monitorEnter(lock); // 获取锁
+        try {
+            return sharedValue; // 读取共享变量
+        } finally {
+            unsafe.monitorExit(lock); // 释放锁
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        MonitorExample example = new MonitorExample();
+
+        Thread t1 = new Thread(() -> {
+            for (int i = 0; i < 1000; i++) {
+                example.increment();
+            }
+        });
+
+        Thread t2 = new Thread(() -> {
+            for (int i = 0; i < 1000; i++) {
+                example.increment();
+            }
+        });
+
+        t1.start();
+        t2.start();
+
+        t1.join();
+        t2.join();
+
+        System.out.println("Final Value: " + example.getValue());
+    }
+}
+```
+
+`synchronized` 和 `Unsafe.monitorEnter` 都是基于 Java 对象的 **Monitor（监视器）** 锁机制实现的，但它们在使用方式、底层实现细节以及适用场景上存在一些重要区别。以下是两者的详细对比：
+
+
+
+## synchronized/Unsafe.monitorEnter 底层 ObjectMonitor
+
+java.lang.Object 类定义了 wait()，notify()，notifyAll() ，
+
+在 Java 虚拟机（JVM）中，`ObjectMonitor` 是一个关键的数据结构，用于实现 Java 对象的同步机制，即 `synchronized` 关键字的功能。`ObjectMonitor` 主要用于管理对象的锁状态，确保多线程环境下的线程安全。
+
+### 1. `ObjectMonitor` 的作用
+
+`ObjectMonitor` 主要用于以下场景：
+
+- **对象锁**：当一个线程进入 `synchronized` 方法或代码块时，JVM 会使用 `ObjectMonitor` 来管理该对象的锁。
+- **线程等待和通知**：`ObjectMonitor` 还用于实现 `wait()`、`notify()` 和 `notifyAll()` 方法，这些方法用于线程间的通信。
+
+### 2. `ObjectMonitor` 的结构
+
+`ObjectMonitor` 的主要字段包括：
+
+- **`_header`**：存储对象的标记字（Mark Word），用于存储对象的哈希码、锁状态等信息。
+- **`_owner`**：指向当前持有锁的线程。
+- **`_WaitSet`**：存储等待在该对象上的线程队列（调用了 `wait()` 方法的线程）。
+- **`_EntryList`**：存储等待获取锁的线程队列。
+- **`_recursions`**：记录锁的重入次数，用于支持可重入锁。
+- **`_count`**：记录当前持有锁的线程数。
+
+### 3. 锁的状态
+
+`ObjectMonitor` 管理的锁状态可以分为以下几种：
+
+- **无锁状态**：对象没有被任何线程锁定。
+- **偏向锁**：为了减少无竞争情况下的锁开销，JVM 会偏向于第一个获取锁的线程。
+- **轻量级锁**：当多个线程竞争锁时，JVM 会尝试使用轻量级锁来避免重量级锁的开销。
+- **重量级锁**：当竞争激烈时，JVM 会升级为重量级锁，此时 `ObjectMonitor` 会被完全启用。
+
+### 4. 锁的获取和释放
+
+- **获取锁**：当一个线程尝试进入 `synchronized` 代码块时，JVM 会检查 `ObjectMonitor` 的 `_owner` 字段。如果 `_owner` 为 `null`，则该线程成为锁的持有者；否则，线程会进入 `_EntryList` 等待。
+- **释放锁**：当线程退出 `synchronized` 代码块时，JVM 会释放锁，并将 `_owner` 设置为 `null`，然后唤醒 `_EntryList` 中的下一个线程。
+
+### 5. `wait()` 和 `notify()` 的实现
+
+- **`wait()`**：当一个线程调用 `wait()` 方法时，它会释放锁并进入 `_WaitSet` 队列，等待其他线程调用 `notify()` 或 `notifyAll()`。
+- **`notify()`**：当一个线程调用 `notify()` 方法时，JVM 会从 `_WaitSet` 中随机选择一个线程，并将其移动到 `_EntryList` 中，等待重新获取锁。
+- **`notifyAll()`**：当一个线程调用 `notifyAll()` 方法时，JVM 会将 `_WaitSet` 中的所有线程移动到 `_EntryList` 中。
+
+### 6. 性能考虑
+
+`ObjectMonitor` 是 Java 同步机制的核心，但其实现可能会带来一定的性能开销，特别是在高并发场景下。为了优化性能，JVM 引入了偏向锁、轻量级锁等机制，以减少 `ObjectMonitor` 的使用频率。
+
+### 7. 总结
+
+`ObjectMonitor` 是 JVM 中用于管理对象锁和线程同步的重要数据结构。它通过 `_owner`、`_WaitSet`、`_EntryList` 等字段来实现锁的获取、释放以及线程间的通信。理解 `ObjectMonitor` 的工作原理对于深入理解 Java 并发编程和 JVM 内部机制非常重要。
