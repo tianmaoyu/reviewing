@@ -2733,3 +2733,53 @@ java.lang.Object 类定义了 wait()，notify()，notifyAll() ，
 ### 7. 总结
 
 `ObjectMonitor` 是 JVM 中用于管理对象锁和线程同步的重要数据结构。它通过 `_owner`、`_WaitSet`、`_EntryList` 等字段来实现锁的获取、释放以及线程间的通信。理解 `ObjectMonitor` 的工作原理对于深入理解 Java 并发编程和 JVM 内部机制非常重要。
+
+
+
+
+
+## String ，StringBuilder ，StringBuffer
+
+1. String 不可变，每次更改都会重新创建新的字符串
+2. StringBuilder 内部 char[] 
+3. StringBuffer  线程安全
+
+> 在 Java 9 之后，`String`、`StringBuilder` 与 `StringBuffer` 的实现改用 `byte` 数组存储字符串。 新版的 String 其实支持两个编码方案：Latin-1 和 UTF-16。如果字符串中包含的汉字没有超过 Latin-1 可表示范围内的字符，那就会使用 Latin-1 作为编码方案。Latin-1 编码方案下，`byte` 占一个字节(8 位)，`char` 占用 2 个字节（16），`byte` 相较 `char` 节省一半的内存空间。
+
+
+
+
+
+## finally  /try-with-resources
+
+> 会打断 表面上的代码执行顺序，finally 它都会执行，如果 try 或者 catch 中有 return  ，return 执行前会执行 finally
+>
+> 除非：终止当前正在运行的Java虚拟机， System.exit(1);
+
+```java
+public static String leftGreater(){
+        try {
+            System.out.println("Try to do something");
+            return "Success";
+        } catch (Exception e) {
+            System.out.println("Catch Exception -> " + e.getMessage());
+        } finally {
+            System.out.println("Finally");
+        }
+        return "Failed";
+    }
+```
+
+```java
+try (BufferedInputStream bin = new BufferedInputStream(new FileInputStream(new File("test.txt")));
+     BufferedOutputStream bout = new BufferedOutputStream(new FileOutputStream(new File("out.txt")))) {
+    int b;
+    while ((b = bin.read()) != -1) {
+        bout.write(b);
+    }
+}
+catch (IOException e) {
+    e.printStackTrace();
+}
+```
+
