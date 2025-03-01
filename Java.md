@@ -1137,6 +1137,77 @@ synchronized (obj) {
 
 
 
+### 线程池的终止
+
+在 Java 中，`ExecutorService` 提供了两种方法来关闭线程池：`shutdown()` 和 `shutdownNow()`。它们的行为不同，分别适用于不同的场景。
+
+### 1. **`shutdown()` 方法**
+
+- **作用** ：
+  - 调用 `shutdown()` 后，线程池会进入“关闭”状态。
+  - 线程池不再接受新的任务提交（即调用 `execute()` 或 `submit()` 会抛出 `RejectedExecutionException`）。
+  - 线程池会继续执行已经提交的任务（包括正在运行的任务和队列中等待的任务），直到所有任务完成。
+- **特点** ：
+  - 不会立即终止线程池。
+  - 等待所有已提交的任务完成后，线程池才会完全关闭。
+
+
+
+### 2. **`shutdownNow()` 方法**
+
+- **作用** ：
+
+  - 调用 `shutdownNow()` 后，线程池会尝试立即停止所有正在运行的任务，并返回尚未开始的任务列表。
+  - 它通过调用每个线程的 `Thread.interrupt()` 方法来中断正在运行的任务。
+  - 注意：如果任务没有正确响应中断（例如没有检查 `Thread.isInterrupted()` 或处理 `InterruptedException`），任务可能不会被终止。
+
+- **特点** ：
+
+  - 尝试立即终止线程池。
+  - 返回一个包含未开始任务的列表。
+  - 可能无法完全终止所有任务，取决于任务是否支持中断。
+
+  
+
+### 4. **如何确保线程池完全关闭？**
+
+无论是调用 `shutdown()` 还是 `shutdownNow()`，都需要配合 `awaitTermination()` 方法来确保线程池完全关闭。
+
+#### 示例代码：
+
+```java
+ExecutorService executor = Executors.newFixedThreadPool(2);
+// 提交任务
+executor.submit(() -> {
+    try {
+        Thread.sleep(5000);
+        System.out.println("Task completed.");
+    } catch (InterruptedException e) {
+        System.out.println("Task interrupted.");
+    }
+});
+// 尝试关闭线程池
+try {
+    System.out.println("Attempting to shutdown...");
+    executor.shutdown();
+    if (!executor.awaitTermination(60, TimeUnit.SECONDS)) { // 等待最多 60 秒
+        System.out.println("Forcing shutdown...");
+        executor.shutdownNow(); // 强制关闭
+    }
+} catch (InterruptedException e) {
+    System.out.println("Shutdown interrupted.");
+    executor.shutdownNow();
+}
+```
+
+- 关键点 ：
+  - `awaitTermination(long timeout, TimeUnit unit)`：阻塞当前线程，直到线程池关闭或超时。
+  - 如果超时后线程池仍未关闭，则调用 `shutdownNow()` 强制终止。
+
+
+
+
+
 ## 2.10,volatile的作用,什么是可见性和有序性
 
 
@@ -1798,7 +1869,7 @@ ThreadPoolExecutor(
 int cpuCores = Runtime.getRuntime().availableProcessors();
 
 ThreadPoolExecutor executor = new ThreadPoolExecutor(
-    cpuCores + 1,                   // corePoolSize
+    cpuCores ,                   // corePoolSize
     cpuCores * 2,                   // maximumPoolSize
     60, TimeUnit.SECONDS,           // keepAliveTime
     new LinkedBlockingQueue<>(1000),// 有界队列（容量1000）
@@ -1820,8 +1891,8 @@ ThreadPoolExecutor executor = new ThreadPoolExecutor(
 - 批量数据处理（CPU 密集型）：
 
   ```java
-  corePoolSize = cpuCores + 1;
-  maximumPoolSize = cpuCores + 1; // 严格限制线程数
+  corePoolSize = cpuCores;
+  maximumPoolSize = cpuCores; // 严格限制线程数
   workQueue = new SynchronousQueue<>(); // 无缓冲，直接执行
   ```
 
@@ -1894,6 +1965,33 @@ ThreadPoolExecutor executor = new ThreadPoolExecutor(
 -----
 
 Redis 出现卡顿（延迟高、响应慢）通常由多种原因引起，需要结合具体场景排查。以下是常见原因及对应的解决方案：
+
+
+
+
+
+### Spring 内部线程池的
+
+使用 Spring 内部线程池时，一定要手动自定义线程池，配置合理的参数，不然会出现生产问题（一个请求创建一个线程）。
+
+
+
+### 线程池和 ThreadLocal 共用的坑
+
+线程池和 `ThreadLocal`共用，可能会导致线程从`ThreadLocal`获取到的是旧值/脏数据。这是因为线程池会复用线程对象，与线程对象绑定的类的静态属性 `ThreadLocal` 变量也会被重用，这就导致一个线程可能获取到其他线程的`ThreadLocal` 值。
+
+不要以为代码中没有显示使用线程池就不存在线程池了，像常用的 Web 服务器 Tomcat 处理任务为了提高并发量，就使用到了线程池，并且使用的是基于原生 Java 线程池改进完善得到的自定义线程池。
+
+当然了，你可以将 Tomcat 设置为单线程处理任务。不过，这并不合适，会严重影响其处理任务的速度。
+
+## 关闭线程池
+
+线程池提供了两个关闭方法：
+
+- **`shutdown（）`** :关闭线程池，线程池的状态变为 `SHUTDOWN`。线程池不再接受新任务了，但是队列里的任务得执行完毕。
+- **`shutdownNow（）`** :关闭线程池，线程池的状态变为 `STOP`。线程池会终止当前正在运行的任务，停止处理排队的任务并返回正在等待执行的 List。
+
+调用完 `shutdownNow` 和 `shuwdown` 方法后，并不代表线程池已经完成关闭操作，它只是异步的通知线程池进行关闭处理。如果要同步等待线程池彻底关闭后才继续往下执行，需要调用`awaitTermination`方法进行同步等待。
 
 
 
