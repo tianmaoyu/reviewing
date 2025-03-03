@@ -985,12 +985,14 @@ VM 判断对象能否被回收的核心机制是 **可达性分析（Reachabilit
 
 Java 对引用进行了细化，不同引用类型直接影响回收策略：
 
+> Gc root 是否可达，是否内存足够，
+
 1. **强引用（Strong Reference）**
    - 最常见的引用（如 `Object obj = new Object()`）。
    - 只要强引用存在，对象**永远不会被回收**。
 2. **软引用（Soft Reference）**
    - 通过 `SoftReference` 类实现。
-   - 内存不足时（触发 Full GC 前），**会回收软引用对象**。
+   - 内存不足时（触发 Full GC 前），**会回收软引用对象**。（回收除了 是否可达，还有判断内存请）
    - 适合缓存场景。
 3. **弱引用（Weak Reference）**
    - 通过 `WeakReference` 类实现。

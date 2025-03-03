@@ -593,6 +593,8 @@ Spring提供了以下几种主要的Bean作用域：
 
 ## 2.10,Spring如何实现事务的管理？如何实现声明式事务？
 
+> **ROPAGATION_REQUIRED**--默认。这意味着如果当前存在事务，则加入该事务；如果没有，则新建一个事务。 不管是声明式还是，编程式
+
 在 Spring 框架中，事务管理主要通过 **声明式事务管理** 和 **编程式事务管理** 两种方式实现。以下是详细实现方案：
 
 ### 1. 配置事务管理器
@@ -869,6 +871,56 @@ public void manualTransaction() {
 - **明确事务边界**：通过合理的事务传播行为配置，确保事务边界清晰，避免事务过大或过小导致的数据一致性问题。
 
 理解并正确应用事务传播行为，有助于构建健壮、可维护且高效的事务管理机制，从而提升应用程序的整体质量和性能。
+
+
+
+
+
+### @Transactional
+
+> `private`方法无法被代理对象拦截-坑
+>
+> 异常会滚--坑
+>
+> 控制细腻度
+
+在Spring的事务管理中，`@Transactional`注解用于声明事务的边界和行为。默认情况下，Spring会在遇到**未检查异常（unchecked exceptions）**时回滚事务，而在遇到**已检查异常（checked exceptions）**时不会回滚事务。以下是详细的说明：
+
+------
+
+### **默认回滚规则**
+
+1. **未检查异常（Unchecked Exceptions）**
+   - 默认情况下，Spring会回滚所有未检查异常（即继承自`RuntimeException`的异常）。
+   - 常见的未检查异常包括：
+     - `NullPointerException`
+     - `IllegalArgumentException`
+     - `IllegalStateException`
+     - `ArrayIndexOutOfBoundsException`
+     - 自定义的`RuntimeException`子类。
+2. **已检查异常（Checked Exceptions）**
+   - 默认情况下，Spring不会回滚已检查异常（即继承自`Exception`但不继承自`RuntimeException`的异常）。
+   - 常见的已检查异常包括：
+     - `IOException`
+     - `SQLException`
+     - 自定义的`Exception`子类。
+
+------
+
+### **自定义回滚行为**
+
+可以通过`@Transactional`注解的属性来定制回滚行为：
+
+
+
+### `private`方法无法被代理对象拦截
+
+- `@Transactional`方法内部调用`private`方法时，`private`方法不会继承外部方法的事务。
+- 原因是Spring的事务管理基于代理机制，而`private`方法无法被代理对象拦截。
+- 解决方案包括：
+  1. 将`private`方法改为`public`，并添加`@Transactional`注解。
+  2. 使用`self-invocation`通过代理对象调用方法。
+  3. 将事务逻辑提取到另一个Service中。
 
 
 
@@ -2329,8 +2381,6 @@ public class Main {
       -Dcglib.debugLocation=/user/target/class
       ```
 
-      
-
    4. ==final== 不能标记
 
 
@@ -2400,6 +2450,54 @@ public class B {
 ==？？==工厂对象的作用是延迟生成Bean的早期引用
 
 
+
+## 为什么 @Lazy  可以解决循环依赖
+
+### **场景设定**
+
+假设有两个Bean：`A`和`B`，它们互相依赖，其中`A`标记了`@Lazy`，而`B`没有标记：
+
+```java
+@Component
+public class A {
+    private final B b;
+
+    @Lazy
+    public A(B b) {
+        this.b = b;
+    }
+}
+@Component
+public class B {
+    private final A a;
+
+    public B(A a) {
+        this.a = a;
+    }
+}
+```
+
+### **初始化流程**
+
+1. **Spring容器启动**
+   Spring容器开始初始化所有单例Bean。此时，它会发现`A`和`B`互相依赖。
+2. **初始化`B`**
+   - 由于`B`没有标记`@Lazy`，Spring会尝试立即初始化`B`。
+   - 在初始化`B`时，发现它需要注入`A`的实例。
+   - 由于`A`标记了`@Lazy`，Spring会为`A`生成一个**代理对象**，并将这个代理对象注入到`B`中。
+   - `B`完成初始化，并被放入一级缓存（`singletonObjects`）。
+3. **初始化`A`**
+   - 由于`A`标记了`@Lazy`，Spring不会立即初始化`A`，而是生成一个代理对象。
+   - 代理对象被注入到`B`中后，`A`的真实初始化被延迟到首次访问时。
+4. **首次访问`A`**
+   - 当某个组件（如控制器）首次访问`A`时，代理对象会触发`A`的真实初始化。
+   - 在初始化`A`时，Spring发现它需要注入`B`的实例。
+   - 由于`B`已经初始化完成（在步骤2中），Spring会直接将`B`的实例注入到`A`中。
+   - `A`完成初始化，并被放入一级缓存（`singletonObjects`）。
+
+
+
+> 如个两个  循环依赖的bean 都标记的 @Lazy  此刻有怎么解决？
 
 
 
@@ -2665,13 +2763,11 @@ Spring的AOP（Aspect-Oriented Programming，面向切面编程）是Spring框�
 
 ### **实现原理**
 
-- 动态代理
-
-  ：
+- 动态代理：
 
   - 若目标对象实现接口，使用**JDK动态代理**生成代理类。
   - 若无接口，使用**CGLIB**生成子类代理。
-
+  
 - **代理对象**：
   在方法调用时，代理对象会触发关联的Advice逻辑。
 
@@ -2680,10 +2776,6 @@ Spring的AOP（Aspect-Oriented Programming，面向切面编程）是Spring框�
 ### **示例代码**
 
 ```
-JAVA
-
-
-
 @Aspect
 @Component
 public class LoggingAspect {
@@ -2827,4 +2919,15 @@ Spring 提供扩展点，允许在 Bean 初始化前后插入逻辑：
 
 - **`postProcessBeforeInitialization()`**：在 Bean 初始化前执行（如 `@PostConstruct` 处理）。
 - **`postProcessAfterInitialization()`**：在 Bean 初始化后执行（如 AOP 代理的生成）。
+
+
+
+
+
+### @Autowired vs @Resource 的区别
+
+- `@Autowired` 是 Spring 提供的注解，`@Resource` 是 JDK 提供的注解。
+- `Autowired` 默认的注入方式为`byType`（根据类型进行匹配），`@Resource`默认注入方式为 `byName`（根据名称进行匹配）。
+- 当一个接口存在多个实现类的情况下，`@Autowired` 和`@Resource`都需要通过名称才能正确匹配到对应的 Bean。`Autowired` 可以通过 `@Qualifier` 注解来显式指定名称，`@Resource`可以通过 `name` 属性来显式指定名称。
+- `@Autowired` 支持在构造函数、方法、字段和参数上使用。`@Resource` 主要用于字段和方法上的注入，不支持在构造函数或参数上使用。
 
