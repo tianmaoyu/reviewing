@@ -85,6 +85,25 @@ public class ReadJarFileExample {
 
 ## 一，==重点==Spring Boot 的自动配置
 
+> @SpringBootApplication   ->@EnableAutoConfiguration ->   具体执行 类AutoConfigurationImportSelector  [ 实现很多的 ..  BeanClassLoaderAware, ResourceLoaderAware, BeanFactoryAware]  
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+<1.>@SpringBootConfiguration
+<2.>@ComponentScan
+<3.>@EnableAutoConfiguration
+public @interface SpringBootApplication {
+
+}
+```
+
+@SpringBootApplication看作是 @Configuration、@EnableAutoConfiguration、@ComponentScan 注解的集合。根据 SpringBoot 官网，这三个注解的作用分别是：@EnableAutoConfiguration：启用 SpringBoot 的自动配置机制@Configuration：允许在上下文中注册额外的 bean 或导入其他配置类@ComponentScan：扫描被@Component (@Service,@Controller)注解的 bean，注解默认会扫描启动类
+
+
+
 Spring Boot 的自动配置（Auto-Configuration）是其核心特性之一，它通过条件化配置（Conditional Configuration）和约定优于配置（Convention over Configuration）的原则，减少开发者的手动配置工作。其自动装配原理可以分为以下几个关键步骤：
 
 ------
@@ -194,21 +213,59 @@ Spring Boot 的自动配置通过以下机制实现：
 
 
 
+
+
 ## Spring Boot 的自动装配流程
 
 Spring Boot 的自动装配（Auto-configuration）是其核心特性之一，它能够根据项目中引入的依赖和配置，自动配置 Spring 应用。以下是 Spring Boot 自动装配的核心流程：
 
 ### 1. **启动类标注 `@SpringBootApplication`**
 
-通常，Spring Boot 应用的入口类会使用 `@SpringBootApplication` 注解。这个注解是一个组合注解，包含了以下几个重要的注解：
+通常，Spring Boot 应用的入口类会使用 `@SpringBootApplication` 注解。这个注解是一个组合注解，包含了以下几个重要的注解 ：
 
 - `@Configuration`：将类标记为配置类，允许在其中定义 Bean。
-- `@EnableAutoConfiguration`：启用自动装配功能。
+- `@EnableAutoConfiguration`：启用自动装配功能-。
 - `@ComponentScan`：启用组件扫描，默认扫描启动类所在包及其子包中的组件。
 
 ### 2. **`@EnableAutoConfiguration` 触发自动装配**
 
 当 Spring Boot 应用启动时，`@EnableAutoConfiguration` 注解会触发自动装配机制。具体流程如下：
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+@AutoConfigurationPackage //作用：将main包下的所有组件注册到容器中
+@Import({AutoConfigurationImportSelector.class}) //加载自动装配类 xxxAutoconfiguration
+public @interface EnableAutoConfiguration {
+    String ENABLED_OVERRIDE_PROPERTY = "spring.boot.enableautoconfiguration";
+
+    Class<?>[] exclude() default {};
+
+    String[] excludeName() default {};
+}
+```
+
+### @AutoConfigurationImportSelector
+
+> BeanClassLoaderAware ,ResourceLoaderAware,EnvironmentAware等
+
+```java
+public class AutoConfigurationImportSelector implements DeferredImportSelector, BeanClassLoaderAware, ResourceLoaderAware, BeanFactoryAware, EnvironmentAware, Ordered {
+
+}
+
+public interface DeferredImportSelector extends ImportSelector {
+
+}
+// 这里实现了 具体的扫描
+public interface ImportSelector {
+    String[] selectImports(AnnotationMetadata var1);
+}
+```
+
+
 
 #### a. **收集候选配置类**
 
